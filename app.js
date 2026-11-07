@@ -31,13 +31,14 @@ function fase(w) { return FASES.find(f => w >= f.de && w <= f.a) || FASES[FASES.
 function descarga(w) { return w % 4 === 0 && w !== 24 && w <= MAXW; }
 
 function gymFor(w, di) {
+  // Semanas 1-13: 3 sesiones (L/X/V). Desde la 14: 2 sesiones (L/X) para llegar fresco a las tiradas del finde.
   if (![0, 2, 4].includes(di) || w < 1 || w > MAXW) return null;
+  if (w >= 14 && w !== 25 && di === 4) return null;
   let tpl;
   if (w === 25) tpl = ['A', 'ACT', null][di / 2];
   else if (w <= 13) tpl = ['A', 'B', 'C'][di / 2];
-  else if (w <= 24) tpl = ['A', 'B2', 'C'][di / 2];
-  else if (w <= 27) tpl = ['A', 'B', 'C'][di / 2];
-  else tpl = ['A', 'B', 'CT'][di / 2];
+  else if (w <= 27) tpl = ['A', 'C'][di / 2];
+  else tpl = ['A', 'CT'][di / 2];
   if (!tpl) return { rest: true, t: 'Descanso: mañana es Monegros.' };
   const light = descarga(w) || w >= 24 && w <= 27;
   return { tpl, light, prueba: w === 1 };
