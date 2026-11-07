@@ -33,7 +33,7 @@ function descarga(w) { return w % 4 === 0 && w !== 24 && w <= MAXW; }
 function gymFor(w, di) {
   // Semanas 1-13: 3 sesiones (L/X/V). Desde la 14: 2 sesiones (L/X) para llegar fresco a las tiradas del finde.
   if (![0, 2, 4].includes(di) || w < 1 || w > MAXW) return null;
-  if (w >= 14 && w !== 25 && di === 4) return null;
+  if (w >= 14 && w !== 25 && di === 4) return w <= 24 ? { tpl: 'INT', light: false } : null; // viernes: bici con intervalos
   let tpl;
   if (w === 25) tpl = ['A', 'ACT', null][di / 2];
   else if (w <= 13) tpl = ['A', 'B', 'C'][di / 2];
@@ -232,7 +232,7 @@ function openGym(d, it) {
     });
     const C = T.cardio, CE = EX[C.id];
     let ct = C.t || '';
-    if (C.interval) { const w = weekOf(d); ct = w <= 17 ? '8 min suave + 5×(2 min fuerte / 2 min suave) + 5 min suave' : w <= 21 ? '6 min suave + 5×(3 min fuerte / 2 min suave) + 3 min suave' : '8 min suave + 4×(3 min fuerte / 2 min suave) + 5 min suave'; ct += '. "Fuerte" = te cuesta hablar, pero aguantas el ritmo.'; }
+    if (C.interval) { const w = weekOf(d); ct = w <= 17 ? '8 min suave + 4×(2 min fuerte / 2 min suave) + 5 min suave' : w <= 21 ? '6 min suave + 4×(3 min fuerte / 2 min suave) + 3 min suave' : '8 min suave + 3×(3 min fuerte / 2 min suave) + 5 min suave'; ct += '. "Fuerte" = te cuesta hablar, pero aguantas el ritmo.'; }
     const cc = el(`<button class="card exrow ${draft.cardio ? 'ok' : ''}"><img src="${img(C.id, 0)}" alt=""><div class="tx"><b>Cardio · ${CE.n} ${C.min} min</b><span>${ct}</span></div><div class="st">${draft.cardio ? '✅' : '›'}</div></button>`);
     cc.onclick = () => openCardio(C, ct, () => { draft.cardio = true; save(); draw(); });
     body.append(cc);

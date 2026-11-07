@@ -210,6 +210,7 @@ const GYM = {
     { id: 'Seated_Calf_Raise', s: 2, r: [15, 15], d: 60, fijo: true },
     { id: 'Side_Bridge', s: 2, seg: [20, 30], d: 45 },
   ], cardio: { id: 'Rowing_Stationary', min: 10, t: 'Suave y técnico.' } },
+  INT: { n: 'Bici con intervalos', items: [], cardio: { id: 'Bicycling_Stationary', min: 28, interval: true } },
   ACT: { n: 'Activación pre-Monegros', items: [], cardio: { id: 'Bicycling_Stationary', min: 30, t: '25 min muy suave con 3 cambios de 1 min alegre. Nada más: el sábado es el día.' } },
 };
 
@@ -219,7 +220,7 @@ const CALENTAMIENTO = '8 min de bici estática suave + 5 gato-camello + 3 "mejor
 const FASES = [
   { n: 'Vuelta', de: 1, a: 4, c: '#22c55e', t: 'Volver a coger el hábito y la técnica. Todo suave.' },
   { n: 'Base', de: 5, a: 13, c: '#38bdf8', t: 'Subir horas de BTT poco a poco y ganar fuerza.' },
-  { n: 'Construcción', de: 14, a: 21, c: '#f97316', t: 'Tiradas largas con desnivel. Pasas a 2 días de gimnasio (lunes y miércoles) para dejar el finde fresco.' },
+  { n: 'Construcción', de: 14, a: 21, c: '#f97316', t: 'Tiradas largas con desnivel. Gimnasio lunes y miércoles. El viernes, bici con intervalos suaves.' },
   { n: 'Afinado', de: 22, a: 25, c: '#eab308', t: 'Bajar volumen para llegar fresco a Monegros.' },
   { n: 'Recuperación', de: 26, a: 27, c: '#a3a3a3', t: 'Descansar después de Monegros.' },
   { n: 'Transición a trail', de: 28, a: 35, c: '#a78bfa', t: 'El trail pasa a ser la tirada principal.' },
