@@ -238,20 +238,53 @@ function render() {
 
 // ---------- HOY ----------
 function vHoy(m) {
-  const t = today(); const P = DB.perfil; const f = P.finde ? fase(t) : null;
-  const dias = P.monegros ? Math.round((parse(P.monegros) - t) / DAY) : -1;
-  m.append(el(`<header class="hero"><div class="date">${DN[dayIdx(t)]}, ${fmt(t)}</div>
-    ${f ? `<span class="ph" style="--c:${f.c}">${f.n}${descarga(t) ? ' · semana de descarga' : ''}</span>` : descarga(t) ? '<span class="ph" style="--c:#a3a3a3">Semana de descarga</span>' : ''}
-    ${P.finde && dias >= 0 ? `<div class="count"><b>${dias}</b> días para Monegros</div>` : ''}</header>`));
+  const t = today(); const P = DB.perfil; const f = P.finde ? fase(t) : null; const S = stats();
+  m.append(el(cabeceraNivel(S)));
+  m.append(el(`<div class="fecha"><span>${DN[dayIdx(t)]}, ${fmt(t)}</span>${f ? `<span class="ph" style="--c:${f.c}">${f.n}${descarga(t) ? ' · descarga' : ''}</span>` : descarga(t) ? '<span class="ph" style="--c:#a3a3a3">Semana de descarga</span>' : ''}</div>`));
   if (DB.activo) { const c = el(`<button class="card warn item"><span class="ic">⏱️</span><span class="tx"><b>Entreno en marcha</b><span>${DB.activo.n} · toca para seguir</span></span><span class="st">›</span></button>`); c.onclick = abrirEntreno; m.append(c); }
-  if (chequeoPendiente()) { const c = el(`<button class="card note item"><span class="ic">📋</span><span class="tx"><b>Chequeo de la semana</b><span>Cómo te has recuperado y cuánto pesas. 1 minuto.</span></span><span class="st">›</span></button>`); c.onclick = abrirChequeo; m.append(c); }
-  m.append(el('<h3>Hoy</h3>'));
-  m.append(tarjetaDia(t, true));
+  if (chequeoPendiente()) { const c = el(`<button class="card note item"><span class="ic">📋</span><span class="tx"><b>Chequeo de la semana · +${PUNTOS.chequeo} pts</b><span>Cómo te has recuperado y cuánto pesas. 1 minuto.</span></span><span class="st">›</span></button>`); c.onclick = abrirChequeo; m.append(c); }
+  // anillos de la semana
+  const R = retoSemana(monday(t));
+  let minP = 0, minH = 0; for (let i = 0; i < 7; i++) { const d = addD(monday(t), i); const s = salidaDe(d); if (s) minP += s.h * 60; const r = DB.salidas[key(d)]; if (r) minH += r.min; }
+  const ps = DB.pesos.slice().sort((a, b) => a.f < b.f ? -1 : 1);
+  const kg0 = ps.length ? ps[0].kg : P.peso, kgA = pesoActual();
+  const fPeso = P.objetivo === 'bajar' && kg0 > P.pesoObj ? (kg0 - kgA) / (kg0 - P.pesoObj) : null;
+  m.append(el(`<div class="rings">${anillo(R.gP ? R.gH / R.gP : 0, '#f97316', `${R.gH}/${R.gP}`, 'Gimnasio')}
+    ${P.finde ? anillo(minP ? minH / minP : 0, '#38bdf8', hm(minH / 60).replace(' min', '′'), 'Bici y monte') : ''}
+    ${fPeso != null ? anillo(fPeso, '#22c55e', `${num(kg0 - kgA)}`, 'kg bajados') : anillo(R.frac, '#22c55e', `${Math.round(R.frac * 100)}%`, 'Reto')}</div>`));
+  m.append(tarjetaHoy(t));
+  const cm = camino(); if (cm) m.append(el(cm));
+  const rt = tarjetaReto(); if (rt) m.append(el(rt));
+  m.append(filaMedallas());
   const N = nutri(); const ex = extraDia(t);
   const c = el(`<button class="card item"><span class="ic">🍽️</span><span class="tx"><b>${r10(N.kcal + (ex ? ex.kcal : 0))} kcal hoy</b><span>${N.p} g de proteína${ex ? ` · +${ex.kcal} por la salida` : ''}</span></span><span class="st">›</span></button>`);
   c.onclick = () => { tab = 'comida'; render(); }; m.append(c);
   m.append(el('<h3>Próximos días</h3>'));
   for (let i = 1; i <= 6; i++) { const d = addD(t, i); const x = diaPlan(d); if (x.tipo === 'descanso') continue; m.append(tarjetaDia(d, false)); }
+}
+// tarjeta grande de hoy, con foto
+function tarjetaHoy(t) {
+  const x = diaPlan(t); const box = el('<div class="hoy"></div>');
+  if (x.tipo === 'gym') {
+    const ses = x.ses; const h = hechoGym(t); const ids = ses.items.map((y, i) => ejDe(ses, i));
+    const ult = DB.logs.filter(l => l.k === ses.k).pop(); const sube = ult && (ult.res || []).find(r => /^Sube/.test(r.msg || '') && ids.includes(r.id)); const rec = sube ? sube.id : null;
+    const c = el(`<div class="hcard ${h ? 'ok' : ''}"><div class="hfoto">${ids.slice(0, 3).map(id => `<img src="${img(id)}" alt="">`).join('')}<span class="hpill">Hoy · ${ses.n}</span></div>
+      <div class="hbody"><div><b>${h ? `Hecho · ${Math.round(h.dur)} min · ${num(h.vol / 1000)} t` : `${ses.items.length} ejercicios · ~${DB.perfil.min} min`}</b><small>${h ? '¡Buen trabajo!' : `+${PUNTOS.gym} puntos${rec ? ` · toca subir peso en ${LIB[rec].n.toLowerCase()}` : ''}`}</small></div>
+      ${h ? '<span class="st">✓</span>' : DB.activo ? '' : '<button class="btn">Empezar</button>'}</div></div>`);
+    c.querySelector('.hfoto').onclick = () => h ? verResumen(h) : verSesion(ses, t);
+    const b = c.querySelector('.hbody .btn'); if (b) b.onclick = () => empezar(ses, t);
+    if (h) c.querySelector('.hbody').onclick = () => verResumen(h);
+    box.append(c);
+    if (x.sal) box.append(tarjetaSalida(t, x.sal, 'También: '));
+    return box;
+  }
+  if (x.tipo === 'salida') {
+    const s = x.sal; const r = DB.salidas[key(t)]; const [ic, n] = TIPO[s.tipo];
+    const c = el(`<div class="hcard out ${r ? 'ok' : ''}"><div class="hfoto big"><span class="hic">${ic}</span><span class="hpill">Hoy · ${n} · ${hm(s.h)}</span></div>
+      <div class="hbody"><div><b>${r ? `Hecho · ${r.min} min · ${r.sens}` : s.t}</b><small>${r ? '¡Bien!' : `+${Math.round(s.h * 30)} puntos`}</small></div>${r ? '<span class="st">✓</span>' : '<button class="btn">Apuntar</button>'}</div></div>`);
+    c.onclick = () => apuntarSalida(t, s); box.append(c); return box;
+  }
+  box.append(tarjetaDia(t, true)); return box;
 }
 function tarjetaDia(d, grande) {
   const x = diaPlan(d); const lab = grande ? '' : `${DN[dayIdx(d)]} ${d.getDate()} · `;
@@ -268,7 +301,7 @@ function tarjetaDia(d, grande) {
   if (x.tipo === 'cardio') {
     const h = hechoGym(d);
     const c = el(`<button class="card item str ${h ? 'ok' : ''}"><span class="ic">🚴</span><span class="tx"><b>${lab}${x.n}</b><span>${x.t}</span></span><span class="st">${h ? '✓' : ''}</span></button>`);
-    c.onclick = () => { if (h) return; if (confirm('¿Marcar como hecho?')) { DB.logs.push({ fecha: key(d), ses: x.n, dur: 30, vol: 0, items: [], cardio: true }); save(); render(); } };
+    c.onclick = () => { if (h) return; if (confirm('¿Marcar como hecho?')) { DB.logs.push({ fecha: key(d), ses: x.n, dur: 30, vol: 0, items: [], cardio: true }); save(); render(); logros(); } };
     return c;
   }
   if (x.tipo === 'salida') return tarjetaSalida(d, x.sal, lab);
@@ -292,7 +325,7 @@ function apuntarSalida(d, s) {
   let sens = r.sens || 'Bien';
   o.body.querySelectorAll('#ssens button').forEach(b => b.onclick = () => { sens = b.textContent; o.body.querySelectorAll('#ssens button').forEach(x => x.classList.toggle('sel', x === b)); });
   o.body.querySelector('#sok').onclick = () => {
-    DB.salidas[key(d)] = { min: +o.body.querySelector('#smin').value || 0, sens, tipo: s.tipo }; save(); o.close(); render();
+    DB.salidas[key(d)] = { min: +o.body.querySelector('#smin').value || 0, sens, tipo: s.tipo }; save(); o.close(); render(); logros();
     if (sens === 'Molestia') toast('Con molestia: la próxima, más suave. Si sigue, para.');
   };
   const del = o.body.querySelector('#sdel'); if (del) del.onclick = () => { delete DB.salidas[key(d)]; save(); o.close(); render(); };
@@ -450,6 +483,8 @@ function terminar(o) {
   DB.logs.push(log); DB.activo = null; save();
   clearInterval(descInt); document.querySelectorAll('.rest').forEach(x => x.remove());
   o.close(); verResumen(log, true);
+  if (res.some(r => r.record)) confeti();
+  setTimeout(() => logros(), res.some(r => r.record) ? 1200 : 300);
 }
 function verResumen(l, recien) {
   const o = overlay(recien ? '¡Entreno hecho! 💪' : l.ses, `${DN[dayIdx(parse(l.fecha))]} ${fmt(parse(l.fecha))}`, () => render());
@@ -479,7 +514,7 @@ function abrirChequeo() {
   const b = el('<button class="btn big wide">Guardar chequeo</button>');
   b.onclick = () => {
     const pk = parseFloat(String(o.body.querySelector('#cpeso').value).replace(',', '.')) || null;
-    const msgs = aplicarChequeo(resp, pk);
+    const msgs = aplicarChequeo(resp, pk); setTimeout(() => logros(), 400);
     o.body.innerHTML = `<h3>Ajustes de esta semana</h3>${msgs.length ? msgs.map(x => `<div class="card">${x}</div>`).join('') : '<div class="card">Todo en orden: el plan sigue igual.</div>'}`;
     const ok = el('<button class="btn big wide">Vale</button>'); ok.onclick = () => o.close(); o.body.append(ok);
   };
@@ -532,7 +567,7 @@ function vComida(m) {
   const g = el(`<div class="card">${ps.length > 1 ? linea(ps.map(p => ({ x: +parse(p.f), y: p.kg })), P.objetivo === 'bajar' ? P.pesoObj : null, 'kg') : '<p class="mut">Cuando tengas dos pesadas verás aquí la gráfica.</p>'}
     <div class="row"><input id="npeso" type="number" inputmode="decimal" step="0.1" placeholder="Peso de hoy"><button class="btn sm">Apuntar</button></div>
     <p class="mut">Ahora ${num(pesoActual())} kg${P.objetivo === 'bajar' ? ` · objetivo ${num(P.pesoObj)} kg` : ''}</p></div>`);
-  g.querySelector('button').onclick = () => { const v = parseFloat(String(g.querySelector('input').value).replace(',', '.')); if (!v) return toast('Pon el peso'); DB.pesos = DB.pesos.filter(p => p.f !== key(today())); DB.pesos.push({ f: key(today()), kg: v }); save(); render(); };
+  g.querySelector('button').onclick = () => { const v = parseFloat(String(g.querySelector('input').value).replace(',', '.')); if (!v) return toast('Pon el peso'); DB.pesos = DB.pesos.filter(p => p.f !== key(today())); DB.pesos.push({ f: key(today()), kg: v }); save(); render(); logros(); };
   m.append(g);
   m.append(el('<h3>Recetas</h3>'));
   const tipos = ['Todas', ...new Set(RECETAS.map(r => r.tipo))];
@@ -548,6 +583,7 @@ function vComida(m) {
 // ---------- PROGRESO ----------
 function vProgreso(m) {
   m.append(el('<h2>Progreso</h2>'));
+  m.append(el(cabeceraNivel(stats()))); m.append(filaMedallas());
   const gym = DB.logs.filter(l => !l.cardio);
   const lm = monday(today());
   const estaVol = gym.filter(l => wkey(parse(l.fecha)) === key(lm)).reduce((a, l) => a + l.vol, 0);
@@ -597,7 +633,7 @@ function vAjustes(m) {
   const b2 = el('<button class="btn ghost wide">⬇️ Guardar copia de seguridad</button>'); b2.onclick = exportar; m.append(b2);
   const b3 = el('<button class="btn ghost wide">⬆️ Cargar copia de seguridad</button>'); b3.onclick = importar; m.append(b3);
   const b4 = el('<button class="btn ghost wide danger">Borrar todo y empezar de cero</button>'); b4.onclick = () => { if (confirm('Se borra TODO: plan, entrenos, pesos. No hay vuelta atrás. ¿Seguro?')) { localStorage.removeItem(KEY); location.reload(); } }; m.append(b4);
-  m.append(el('<p class="mut" style="text-align:center;margin-top:20px">Coach Iñaki · v1</p>'));
+  m.append(el('<p class="mut" style="text-align:center;margin-top:20px">Coach Iñaki · v2</p>'));
 }
 function exportar() {
   const b = new Blob([JSON.stringify(DB)], { type: 'application/json' });
@@ -656,7 +692,7 @@ function onboarding(rehacer) {
   const acabar = () => {
     o.body.innerHTML = `<div class="calc"><div class="spin"></div><h3>Calculando tu plan…</h3><p class="mut">Eligiendo ejercicios, series y pesos para ti.</p></div>`;
     setTimeout(() => {
-      DB.perfil = A; DB.plan = generarPlan(A); DB.swaps = {};
+      DB.perfil = A; DB.plan = generarPlan(A); DB.swaps = {}; if (!DB.medallas) { DB.medallas = {}; DB.nivelVisto = 1; }
       if (!DB.pesos.length || rehacer) { DB.pesos = DB.pesos.filter(p => p.f !== key(today())); DB.pesos.push({ f: key(today()), kg: A.peso }); }
       save();
       const N = nutri();
@@ -673,6 +709,7 @@ function onboarding(rehacer) {
 
 // ---------- arranque ----------
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => { tab = b.dataset.t; planWk = 0; render(); });
+logros(true);
 render();
 if (DB.activo && DB.perfil) abrirEntreno();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(r => navigator.serviceWorker.ready).then(r => r.active && r.active.postMessage('fotos')).catch(() => { });
