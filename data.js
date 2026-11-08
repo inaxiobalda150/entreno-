@@ -1,269 +1,1101 @@
-// ===== DATOS DE LA APP (ejercicios, plan, nutrición) =====
-// Para cambiar cosas del plan, se toca este archivo.
+// ===== DATOS DE LA APP: ejercicios, plan de bici y trail, recetas =====
+// Para cambiar cosas, se toca este archivo.
 
-const START = new Date(2026, 10, 2); // lunes 2 nov 2026
-const PERFIL_DEF = {
-  edad: 58, pesoIni: 78.5, pesoObj: 72.5, ritmo: 0.5,
-  monegros: '2027-04-24', ultra: ''
+const PERFIL_DEF = { sexo: "h", edad: 58, altura: 179, peso: 78.5, pesoObj: 72.5, ritmo: 0.5, objetivo: "bajar", nivel: "cero", lugar: "gym", dias: [0, 2, 4], min: 60, prioridad: "pierna", lumbar: true, gemelo: true, finde: true, monegros: "2027-04-24" };
+
+// p = patrón (para cambiar por otro equivalente) · m = músculo · eq = equipo (maq, polea, manc, peso, barra)
+// lum = apto lumbar delicada · ini = peso de arranque orientativo · inc = salto de peso
+const LIB = {
+ "Leg_Press": {
+  "p": "rodilla",
+  "m": "Pierna",
+  "eq": "maq",
+  "lum": true,
+  "ini": 40,
+  "inc": 5,
+  "n": "Prensa de piernas",
+  "pasos": [
+   "Siéntate con la espalda y la cadera bien pegadas al respaldo.",
+   "Pies en el centro de la plataforma, a la anchura de las caderas, puntas un poco hacia fuera.",
+   "Quita los seguros y baja despacio (2-3 s) doblando rodillas hasta unos 90°.",
+   "Empuja con todo el pie (sobre todo talones) hasta casi estirar, sin bloquear las rodillas.",
+   "Expulsa el aire al empujar."
+  ],
+  "err": [
+   "Despegar la cadera del asiento al bajar.",
+   "Bloquear las rodillas arriba.",
+   "Que las rodillas se vayan hacia dentro."
+  ],
+  "gem": "Empuja con talones y planta, no con la punta de los pies: así el gemelo no trabaja de más."
+ },
+ "Goblet_Squat": {
+  "p": "rodilla",
+  "m": "Pierna",
+  "eq": "manc",
+  "lum": true,
+  "ini": 10,
+  "inc": 2,
+  "una": true,
+  "n": "Sentadilla goblet",
+  "pasos": [
+   "Sujeta una mancuerna o kettlebell pegada al pecho con las dos manos.",
+   "Pies algo más abiertos que las caderas, puntas un poco hacia fuera.",
+   "Baja como si te sentaras en una silla, pecho alto y rodillas en la línea de los pies.",
+   "Baja hasta donde mantengas la espalda recta y sube empujando el suelo."
+  ],
+  "err": [
+   "Levantar los talones.",
+   "Redondear la espalda abajo.",
+   "Rodillas hacia dentro."
+  ],
+  "gem": "Talones siempre apoyados. Si notas tirantez en el gemelo, pon un disco fino bajo los talones."
+ },
+ "Hack_Squat": {
+  "p": "rodilla",
+  "m": "Pierna",
+  "eq": "maq",
+  "lum": true,
+  "ini": 20,
+  "inc": 5,
+  "n": "Sentadilla hack en máquina",
+  "pasos": [
+   "Espalda y hombros bien apoyados en el respaldo.",
+   "Pies a la anchura de las caderas en el centro de la plataforma.",
+   "Baja despacio hasta unos 90° de rodilla.",
+   "Sube empujando con todo el pie, sin bloquear las rodillas."
+  ],
+  "err": [
+   "Despegar la espalda del respaldo.",
+   "Rodillas hacia dentro."
+  ]
+ },
+ "Smith_Machine_Squat": {
+  "p": "rodilla",
+  "m": "Pierna",
+  "eq": "maq",
+  "lum": false,
+  "ini": 20,
+  "inc": 5,
+  "n": "Sentadilla en multipower",
+  "pasos": [
+   "Barra apoyada en la parte alta de la espalda, no en el cuello.",
+   "Pies un poco por delante de la barra.",
+   "Baja controlado con el pecho alto.",
+   "Sube empujando con talones."
+  ],
+  "err": [
+   "Redondear la espalda abajo.",
+   "Bajar de golpe."
+  ]
+ },
+ "Bodyweight_Squat": {
+  "p": "rodilla",
+  "m": "Pierna",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "n": "Sentadilla sin peso",
+  "pasos": [
+   "Pies a la anchura de los hombros.",
+   "Brazos al frente para equilibrar.",
+   "Baja como para sentarte en una silla.",
+   "Sube empujando el suelo."
+  ],
+  "err": [
+   "Levantar los talones.",
+   "Rodillas hacia dentro."
+  ]
+ },
+ "Dumbbell_Step_Ups": {
+  "p": "unilateral",
+  "m": "Pierna",
+  "eq": "manc",
+  "lum": true,
+  "ini": 6,
+  "inc": 2,
+  "uni": true,
+  "n": "Subida al cajón con mancuernas",
+  "pasos": [
+   "Cajón o banco a la altura de la rodilla (o algo menos). Una mancuerna en cada mano.",
+   "Pon un pie entero encima del cajón.",
+   "Sube empujando con esa pierna, sin impulsarte con la de abajo.",
+   "Baja despacio. Haz las repes con una pierna y cambia."
+  ],
+  "err": [
+   "Impulsarse con el pie de abajo.",
+   "Rodilla hacia dentro."
+  ],
+  "gem": "Apoya el pie entero (talón incluido) en el cajón."
+ },
+ "Dumbbell_Lunges": {
+  "p": "unilateral",
+  "m": "Pierna",
+  "eq": "manc",
+  "lum": true,
+  "ini": 6,
+  "inc": 2,
+  "uni": true,
+  "n": "Zancada con mancuernas",
+  "pasos": [
+   "De pie, una mancuerna en cada mano.",
+   "Da un paso largo al frente.",
+   "Baja hasta que la rodilla de atrás casi toque el suelo.",
+   "Vuelve empujando con la pierna de delante. Alterna."
+  ],
+  "err": [
+   "Paso demasiado corto.",
+   "Inclinar el tronco hacia delante."
+  ]
+ },
+ "Butt_Lift_Bridge": {
+  "p": "cadera",
+  "m": "Glúteo",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "n": "Puente de glúteo",
+  "pasos": [
+   "Boca arriba, rodillas dobladas y pies apoyados cerca del culo.",
+   "Empuja con los talones y sube la cadera hasta alinear rodillas, cadera y hombros.",
+   "Aprieta el glúteo 2 s arriba y baja despacio."
+  ],
+  "err": [
+   "Arquear la lumbar arriba.",
+   "Empujar con las puntas."
+  ]
+ },
+ "Single_Leg_Glute_Bridge": {
+  "p": "cadera",
+  "m": "Glúteo",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "uni": true,
+  "n": "Puente de glúteo a una pierna",
+  "pasos": [
+   "Boca arriba, una rodilla doblada y la otra pierna estirada al aire.",
+   "Empuja con el talón y sube la cadera.",
+   "Aprieta el glúteo 1 s arriba.",
+   "Baja despacio. Cambia de lado."
+  ],
+  "err": [
+   "Arquear la lumbar en vez de apretar el glúteo."
+  ]
+ },
+ "Barbell_Hip_Thrust": {
+  "p": "cadera",
+  "m": "Glúteo",
+  "eq": "barra",
+  "lum": true,
+  "ini": 20,
+  "inc": 5,
+  "n": "Hip thrust con barra",
+  "pasos": [
+   "Espalda alta apoyada en un banco, barra sobre la cadera con almohadilla.",
+   "Pies apoyados, rodillas dobladas.",
+   "Sube la cadera hasta que quede en línea con el tronco.",
+   "Aprieta glúteo arriba y baja controlado."
+  ],
+  "err": [
+   "Hiperextender la lumbar arriba.",
+   "Empujar con la punta de los pies."
+  ]
+ },
+ "Glute_Kickback": {
+  "p": "gluteo",
+  "m": "Glúteo",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "uni": true,
+  "n": "Patada de glúteo",
+  "pasos": [
+   "A cuatro patas, espalda recta.",
+   "Lleva una pierna atrás y arriba con la rodilla doblada.",
+   "Aprieta el glúteo arriba.",
+   "Baja sin apoyar. Cambia de lado."
+  ],
+  "err": [
+   "Arquear la espalda al subir la pierna."
+  ]
+ },
+ "Thigh_Abductor": {
+  "p": "gluteo",
+  "m": "Glúteo",
+  "eq": "maq",
+  "lum": true,
+  "ini": 25,
+  "inc": 5,
+  "n": "Abductores en máquina",
+  "pasos": [
+   "Siéntate con la espalda apoyada y las almohadillas por fuera de las rodillas.",
+   "Abre las piernas empujando hacia fuera.",
+   "Vuelve despacio sin dejar que el peso golpee."
+  ],
+  "err": [
+   "Ir a tirones.",
+   "Separar la espalda del respaldo."
+  ]
+ },
+ "Seated_Leg_Curl": {
+  "p": "femoral",
+  "m": "Pierna",
+  "eq": "maq",
+  "lum": true,
+  "ini": 20,
+  "inc": 5,
+  "n": "Curl femoral sentado",
+  "pasos": [
+   "Ajusta la máquina: rodilla alineada con el eje y rodillo encima del tobillo.",
+   "Baja el rodillo doblando las rodillas todo lo que puedas.",
+   "Vuelve despacio sin dejar caer el peso."
+  ],
+  "err": [
+   "Levantar la cadera del asiento.",
+   "Soltar de golpe."
+  ],
+  "gem": "Mantén el pie relajado (no en punta) para no cargar el gemelo."
+ },
+ "Lying_Leg_Curls": {
+  "p": "femoral",
+  "m": "Pierna",
+  "eq": "maq",
+  "lum": true,
+  "ini": 15,
+  "inc": 5,
+  "n": "Curl femoral tumbado",
+  "pasos": [
+   "Boca abajo, el rodillo justo encima de los talones.",
+   "Cadera pegada al banco.",
+   "Lleva los talones hacia el culo.",
+   "Baja despacio."
+  ],
+  "err": [
+   "Levantar la cadera.",
+   "Bajar de golpe."
+  ]
+ },
+ "Ball_Leg_Curl": {
+  "p": "femoral",
+  "m": "Pierna",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "n": "Curl femoral con fitball",
+  "pasos": [
+   "Boca arriba con los talones sobre el fitball.",
+   "Sube la cadera.",
+   "Trae la pelota hacia ti doblando rodillas.",
+   "Estira despacio sin bajar la cadera."
+  ],
+  "err": [
+   "Dejar caer la cadera."
+  ]
+ },
+ "Leg_Extensions": {
+  "p": "cuadriceps",
+  "m": "Pierna",
+  "eq": "maq",
+  "lum": true,
+  "ini": 20,
+  "inc": 5,
+  "n": "Extensión de cuádriceps",
+  "pasos": [
+   "Ajusta el respaldo: rodilla alineada con el eje de la máquina, rodillo sobre el tobillo.",
+   "Estira las piernas hasta arriba y aprieta 1 s.",
+   "Baja despacio en 2-3 s."
+  ],
+  "err": [
+   "Dar patadas rápidas.",
+   "Levantar la cadera."
+  ]
+ },
+ "Seated_Calf_Raise": {
+  "p": "gemelo",
+  "m": "Gemelo",
+  "eq": "maq",
+  "lum": true,
+  "ini": 15,
+  "inc": 5,
+  "fijo": true,
+  "n": "Gemelo sentado (prevención)",
+  "pasos": [
+   "Siéntate en la máquina con las rodillas bajo el apoyo y la punta del pie en el escalón.",
+   "Baja el talón despacio (3 s) hasta notar estiramiento suave.",
+   "Sube de puntillas lo más alto posible y aguanta 1 s arriba.",
+   "Peso ligero: es prevención, no fuerza."
+  ],
+  "err": [
+   "Rebotar abajo.",
+   "Ir rápido.",
+   "Meter mucho peso."
+  ],
+  "gem": "Este ejercicio es para cuidar el gemelo izquierdo. Nunca con dolor: si molesta ese día, sáltalo."
+ },
+ "Dumbbell_Bench_Press": {
+  "p": "empuje_h",
+  "m": "Pecho",
+  "eq": "manc",
+  "lum": true,
+  "ini": 10,
+  "inc": 2,
+  "n": "Press banca con mancuernas",
+  "pasos": [
+   "Túmbate en el banco con una mancuerna en cada mano apoyada en los muslos.",
+   "Súbelas a la altura del pecho al tumbarte, palmas mirando a los pies.",
+   "Empuja hacia arriba hasta casi estirar los brazos, juntando un poco las mancuernas.",
+   "Baja despacio hasta que los codos queden algo por debajo del banco.",
+   "Pies firmes en el suelo y hombros pegados atrás todo el rato."
+  ],
+  "err": [
+   "Abrir los codos a 90° del cuerpo (mejor a unos 45°).",
+   "Arquear mucho la espalda.",
+   "Bajar de golpe."
+  ]
+ },
+ "Leverage_Chest_Press": {
+  "p": "empuje_h",
+  "m": "Pecho",
+  "eq": "maq",
+  "lum": true,
+  "ini": 20,
+  "inc": 5,
+  "n": "Press de pecho en máquina",
+  "pasos": [
+   "Ajusta el asiento para que los agarres queden a la altura del pecho.",
+   "Espalda pegada al respaldo.",
+   "Empuja hasta casi estirar los brazos.",
+   "Vuelve despacio."
+  ],
+  "err": [
+   "Encoger los hombros.",
+   "Bloquear los codos."
+  ]
+ },
+ "Pushups": {
+  "p": "empuje_h",
+  "m": "Pecho",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "n": "Flexiones",
+  "pasos": [
+   "Manos algo más abiertas que los hombros.",
+   "Cuerpo recto de cabeza a talones.",
+   "Baja el pecho cerca del suelo, codos a unos 45°.",
+   "Empuja hasta estirar. Si cuesta, apoya rodillas."
+  ],
+  "err": [
+   "Cadera caída.",
+   "Codos muy abiertos."
+  ]
+ },
+ "Incline_Push-Up": {
+  "p": "empuje_h",
+  "m": "Pecho",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "n": "Flexiones inclinadas",
+  "pasos": [
+   "Manos en un banco o mesa firme.",
+   "Cuerpo recto.",
+   "Baja el pecho hacia el banco.",
+   "Empuja hasta estirar."
+  ],
+  "err": [
+   "Doblar la cadera."
+  ]
+ },
+ "Incline_Dumbbell_Press": {
+  "p": "empuje_inc",
+  "m": "Pecho",
+  "eq": "manc",
+  "lum": true,
+  "ini": 8,
+  "inc": 2,
+  "n": "Press inclinado con mancuernas",
+  "pasos": [
+   "Banco inclinado a unos 30°. Mancuernas a la altura del pecho alto.",
+   "Empuja hacia arriba y un poco hacia dentro.",
+   "Baja despacio hasta notar estiramiento en el pecho.",
+   "Si en el Sparta hay máquina de press inclinado, vale igual."
+  ],
+  "err": [
+   "Inclinar demasiado el banco (trabaja más el hombro).",
+   "Despegar la espalda."
+  ]
+ },
+ "Butterfly": {
+  "p": "aperturas",
+  "m": "Pecho",
+  "eq": "maq",
+  "lum": true,
+  "ini": 20,
+  "inc": 5,
+  "n": "Aperturas en máquina (contractor)",
+  "pasos": [
+   "Asiento a la altura que deje los agarres a media altura del pecho.",
+   "Codos un poco doblados.",
+   "Junta los brazos delante del pecho.",
+   "Abre despacio hasta notar estiramiento."
+  ],
+  "err": [
+   "Abrir demasiado atrás.",
+   "Ir con impulso."
+  ]
+ },
+ "Cable_Crossover": {
+  "p": "aperturas",
+  "m": "Pecho",
+  "eq": "polea",
+  "lum": true,
+  "ini": 5,
+  "inc": 2.5,
+  "n": "Cruce de poleas",
+  "pasos": [
+   "Poleas altas, un agarre en cada mano, un paso al frente.",
+   "Codos un poco doblados.",
+   "Lleva las manos juntas hacia abajo y al frente.",
+   "Vuelve despacio."
+  ],
+  "err": [
+   "Doblar mucho los codos (se convierte en press)."
+  ]
+ },
+ "Seated_Dumbbell_Press": {
+  "p": "empuje_v",
+  "m": "Hombro",
+  "eq": "manc",
+  "lum": true,
+  "ini": 6,
+  "inc": 2,
+  "n": "Press de hombro sentado",
+  "pasos": [
+   "Banco con respaldo vertical. Mancuernas a la altura de las orejas, palmas al frente.",
+   "Empuja hacia arriba hasta casi estirar los brazos.",
+   "Baja despacio hasta la altura de las orejas.",
+   "Espalda pegada al respaldo todo el rato."
+  ],
+  "err": [
+   "Arquear la lumbar.",
+   "Bajar demasiado o de golpe."
+  ]
+ },
+ "Leverage_Shoulder_Press": {
+  "p": "empuje_v",
+  "m": "Hombro",
+  "eq": "maq",
+  "lum": true,
+  "ini": 15,
+  "inc": 5,
+  "n": "Press de hombro en máquina",
+  "pasos": [
+   "Asiento con los agarres a la altura de los hombros.",
+   "Espalda pegada.",
+   "Empuja hacia arriba sin bloquear.",
+   "Baja despacio."
+  ],
+  "err": [
+   "Arquear la espalda."
+  ]
+ },
+ "Side_Lateral_Raise": {
+  "p": "hombro_lat",
+  "m": "Hombro",
+  "eq": "manc",
+  "lum": true,
+  "ini": 4,
+  "inc": 1,
+  "n": "Elevaciones laterales",
+  "pasos": [
+   "De pie, mancuernas a los lados.",
+   "Sube los brazos hacia los lados hasta la altura de los hombros.",
+   "Codos un poco doblados.",
+   "Baja despacio."
+  ],
+  "err": [
+   "Subir con impulso.",
+   "Encoger los hombros."
+  ]
+ },
+ "Wide-Grip_Lat_Pulldown": {
+  "p": "tiron_v",
+  "m": "Espalda",
+  "eq": "maq",
+  "lum": true,
+  "ini": 30,
+  "inc": 5,
+  "n": "Jalón al pecho",
+  "pasos": [
+   "Ajusta el rodillo para que sujete bien los muslos.",
+   "Agarra la barra algo más ancho que los hombros, palmas hacia delante.",
+   "Saca pecho, inclínate apenas hacia atrás.",
+   "Tira de la barra hacia la parte alta del pecho llevando los codos hacia abajo y atrás.",
+   "Sube despacio hasta estirar los brazos."
+  ],
+  "err": [
+   "Tirar con los brazos en vez de con la espalda.",
+   "Echarse muy atrás y balancearse.",
+   "Bajar la barra por detrás de la nuca."
+  ]
+ },
+ "Close-Grip_Front_Lat_Pulldown": {
+  "p": "tiron_v",
+  "m": "Espalda",
+  "eq": "maq",
+  "lum": true,
+  "ini": 30,
+  "inc": 5,
+  "n": "Jalón agarre estrecho",
+  "pasos": [
+   "Pon el maneral estrecho (agarre neutro, palmas enfrentadas) si lo hay.",
+   "Sentado, muslos sujetos, pecho alto.",
+   "Tira hacia la parte alta del pecho llevando los codos pegados al cuerpo.",
+   "Sube despacio hasta estirar."
+  ],
+  "err": [
+   "Balancear el cuerpo.",
+   "Encoger los hombros."
+  ]
+ },
+ "Straight-Arm_Pulldown": {
+  "p": "tiron_v",
+  "m": "Espalda",
+  "eq": "polea",
+  "lum": true,
+  "ini": 10,
+  "inc": 2.5,
+  "n": "Pullover en polea",
+  "pasos": [
+   "De pie frente a la polea alta, brazos casi estirados.",
+   "Inclínate un poco hacia delante.",
+   "Lleva la barra hacia los muslos con los brazos rectos.",
+   "Sube despacio."
+  ],
+  "err": [
+   "Doblar los codos."
+  ]
+ },
+ "Seated_Cable_Rows": {
+  "p": "tiron_h",
+  "m": "Espalda",
+  "eq": "polea",
+  "lum": true,
+  "ini": 25,
+  "inc": 5,
+  "n": "Remo sentado en polea",
+  "pasos": [
+   "Siéntate con los pies en los apoyos y rodillas algo flexionadas.",
+   "Agarra el maneral con la espalda recta.",
+   "Tira llevando el maneral al ombligo y junta los omóplatos.",
+   "Vuelve despacio estirando los brazos, sin redondear la espalda."
+  ],
+  "err": [
+   "Balancear el tronco para tirar.",
+   "Encoger los hombros hacia las orejas."
+  ]
+ },
+ "One-Arm_Dumbbell_Row": {
+  "p": "tiron_h",
+  "m": "Espalda",
+  "eq": "manc",
+  "lum": true,
+  "ini": 10,
+  "inc": 2,
+  "uni": true,
+  "n": "Remo con mancuerna a una mano",
+  "pasos": [
+   "Apoya rodilla y mano del mismo lado en el banco, espalda recta y paralela al suelo.",
+   "Con la otra mano coge la mancuerna con el brazo estirado.",
+   "Tira llevando el codo hacia la cadera, pegado al cuerpo.",
+   "Baja despacio. Haz todas las repes y cambia de lado."
+  ],
+  "err": [
+   "Girar el tronco para subir.",
+   "Tirar hacia el hombro en vez de hacia la cadera."
+  ]
+ },
+ "Leverage_High_Row": {
+  "p": "tiron_h",
+  "m": "Espalda",
+  "eq": "maq",
+  "lum": true,
+  "ini": 20,
+  "inc": 5,
+  "n": "Remo en máquina",
+  "pasos": [
+   "Pecho apoyado en el respaldo.",
+   "Agarra las asas con los brazos estirados.",
+   "Tira llevando los codos atrás y junta los omóplatos.",
+   "Vuelve despacio."
+  ],
+  "err": [
+   "Separar el pecho del apoyo.",
+   "Encoger los hombros."
+  ]
+ },
+ "Inverted_Row": {
+  "p": "tiron_h",
+  "m": "Espalda",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "n": "Remo invertido",
+  "pasos": [
+   "Bajo una barra a la altura de la cadera, agárrala.",
+   "Cuerpo recto, talones en el suelo.",
+   "Tira del pecho hacia la barra.",
+   "Baja despacio."
+  ],
+  "err": [
+   "Cadera caída."
+  ]
+ },
+ "Face_Pull": {
+  "p": "posterior",
+  "m": "Hombro",
+  "eq": "polea",
+  "lum": true,
+  "ini": 10,
+  "inc": 2.5,
+  "n": "Face pull",
+  "pasos": [
+   "Polea a la altura de la cara con cuerda.",
+   "Tira hacia la frente abriendo los codos.",
+   "Junta los omóplatos.",
+   "Vuelve despacio."
+  ],
+  "err": [
+   "Tirar con la espalda baja.",
+   "Mucho peso."
+  ]
+ },
+ "Reverse_Flyes": {
+  "p": "posterior",
+  "m": "Hombro",
+  "eq": "manc",
+  "lum": true,
+  "ini": 3,
+  "inc": 1,
+  "n": "Pájaros con mancuernas",
+  "pasos": [
+   "Sentado e inclinado hacia delante, pecho sobre los muslos.",
+   "Mancuernas colgando.",
+   "Abre los brazos hacia los lados.",
+   "Baja despacio."
+  ],
+  "err": [
+   "Subir con impulso."
+  ]
+ },
+ "Dumbbell_Bicep_Curl": {
+  "p": "biceps",
+  "m": "Brazos",
+  "eq": "manc",
+  "lum": true,
+  "ini": 6,
+  "inc": 2,
+  "n": "Curl de bíceps con mancuernas",
+  "pasos": [
+   "De pie, codos pegados al cuerpo.",
+   "Sube las mancuernas girando la palma hacia arriba.",
+   "Baja despacio hasta estirar."
+  ],
+  "err": [
+   "Balancear el cuerpo.",
+   "Despegar los codos."
+  ]
+ },
+ "Hammer_Curls": {
+  "p": "biceps",
+  "m": "Brazos",
+  "eq": "manc",
+  "lum": true,
+  "ini": 6,
+  "inc": 2,
+  "n": "Curl martillo",
+  "pasos": [
+   "De pie, palmas mirándose.",
+   "Sube las mancuernas sin girar la muñeca.",
+   "Baja despacio."
+  ],
+  "err": [
+   "Balancear el cuerpo."
+  ]
+ },
+ "Triceps_Pushdown": {
+  "p": "triceps",
+  "m": "Brazos",
+  "eq": "polea",
+  "lum": true,
+  "ini": 15,
+  "inc": 2.5,
+  "n": "Extensión de tríceps en polea",
+  "pasos": [
+   "Polea alta, codos pegados al cuerpo.",
+   "Empuja hacia abajo hasta estirar los brazos.",
+   "Sube despacio hasta 90°."
+  ],
+  "err": [
+   "Despegar los codos.",
+   "Echar el cuerpo encima."
+  ]
+ },
+ "Cable_Rope_Overhead_Triceps_Extension": {
+  "p": "triceps",
+  "m": "Brazos",
+  "eq": "polea",
+  "lum": true,
+  "ini": 10,
+  "inc": 2.5,
+  "n": "Tríceps por encima de la cabeza",
+  "pasos": [
+   "De espaldas a la polea, cuerda por detrás de la cabeza.",
+   "Codos apuntando al frente.",
+   "Estira los brazos hacia delante y arriba.",
+   "Vuelve despacio."
+  ],
+  "err": [
+   "Abrir los codos."
+  ]
+ },
+ "Bench_Dips": {
+  "p": "triceps",
+  "m": "Brazos",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "n": "Fondos en banco",
+  "pasos": [
+   "Manos en el borde de un banco, piernas al frente.",
+   "Baja doblando codos hasta unos 90°.",
+   "Sube empujando."
+  ],
+  "err": [
+   "Bajar demasiado (carga el hombro)."
+  ]
+ },
+ "Plank": {
+  "p": "core",
+  "m": "Core",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "seg": true,
+  "n": "Plancha",
+  "pasos": [
+   "Apoya antebrazos (codos bajo los hombros) y puntas de los pies.",
+   "Cuerpo recto de cabeza a talones: aprieta glúteo y abdomen.",
+   "Respira normal y aguanta el tiempo marcado."
+  ],
+  "err": [
+   "Cadera caída (carga la lumbar).",
+   "Culo muy arriba.",
+   "Aguantar la respiración."
+  ]
+ },
+ "Side_Bridge": {
+  "p": "core",
+  "m": "Core",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "seg": true,
+  "uni": true,
+  "n": "Plancha lateral",
+  "pasos": [
+   "De lado, apoyado en el antebrazo (codo bajo el hombro) y el canto del pie.",
+   "Sube la cadera hasta que el cuerpo quede recto.",
+   "Aguanta y cambia de lado. Si cuesta, apoya las rodillas."
+  ],
+  "err": [
+   "Dejar caer la cadera.",
+   "Girar el tronco."
+  ]
+ },
+ "Dead_Bug": {
+  "p": "core",
+  "m": "Core",
+  "eq": "peso",
+  "lum": true,
+  "ini": 0,
+  "inc": 0,
+  "n": "Dead bug (bicho muerto)",
+  "pasos": [
+   "Boca arriba, brazos estirados al techo y rodillas a 90° encima de la cadera.",
+   "Pega la zona lumbar al suelo.",
+   "Estira a la vez brazo derecho atrás y pierna izquierda al frente, sin que la lumbar se despegue.",
+   "Vuelve y cambia de lado. Lento y controlado."
+  ],
+  "err": [
+   "Arquear la espalda.",
+   "Ir rápido."
+  ]
+ },
+ "Pallof_Press": {
+  "p": "core",
+  "m": "Core",
+  "eq": "polea",
+  "lum": true,
+  "ini": 5,
+  "inc": 2.5,
+  "uni": true,
+  "n": "Pallof press (antirrotación)",
+  "pasos": [
+   "Polea a la altura del pecho. Ponte de lado a la polea, agarre con las dos manos pegado al pecho.",
+   "Separa un paso de la polea para notar tensión.",
+   "Estira los brazos al frente sin dejar que el cuerpo gire.",
+   "Aguanta 2 s y vuelve al pecho. Haz las repes y cambia de lado."
+  ],
+  "err": [
+   "Dejar que el tronco gire hacia la polea.",
+   "Usar demasiado peso."
+  ]
+ },
+ "Bicycling_Stationary": {
+  "p": "cardio",
+  "m": "Cardio",
+  "eq": "maq",
+  "lum": true,
+  "n": "Bici estática",
+  "pasos": [
+   "Ajusta el sillín: con el pedal abajo, la rodilla queda casi estirada.",
+   "Pedalea a ritmo cómodo: tienes que poder hablar (zona 2).",
+   "Cadencia ágil, unas 85-95 pedaladas por minuto."
+  ],
+  "err": [
+   "Sillín bajo.",
+   "Ir demasiado fuerte en los días de zona 2."
+  ]
+ },
+ "Elliptical_Trainer": {
+  "p": "cardio",
+  "m": "Cardio",
+  "eq": "maq",
+  "lum": true,
+  "n": "Elíptica",
+  "pasos": [
+   "Pies enteros sobre los pedales.",
+   "Ritmo cómodo, espalda recta, usa también los brazos.",
+   "Puedes hablar sin ahogarte."
+  ],
+  "err": [
+   "Apoyarse con todo el peso en las manos."
+  ],
+  "gem": "Mantén el talón apoyado en el pedal todo el movimiento."
+ },
+ "Rowing_Stationary": {
+  "p": "cardio",
+  "m": "Cardio",
+  "eq": "maq",
+  "lum": false,
+  "n": "Remo ergómetro",
+  "pasos": [
+   "Pies sujetos con la cinta a la altura del metatarso.",
+   "Orden: piernas empujan, luego el tronco se echa algo atrás, luego tiran los brazos.",
+   "Vuelta al revés: brazos, tronco, piernas.",
+   "Ritmo suave, unas 20-24 paladas por minuto."
+  ],
+  "err": [
+   "Tirar solo con los brazos.",
+   "Redondear la espalda."
+  ]
+ }
 };
 
-// ---------- EJERCICIOS ----------
-// img = carpeta de fotos (img/<img>_0.jpg posición inicial, _1.jpg final)
-const EX = {
-  Leg_Press: { n: 'Prensa de piernas', g: 'Pierna', maq: true,
-    pasos: ['Siéntate con la espalda y la cadera bien pegadas al respaldo.',
-      'Pies en el centro de la plataforma, a la anchura de las caderas, puntas un poco hacia fuera.',
-      'Quita los seguros y baja despacio (2-3 s) doblando rodillas hasta unos 90°.',
-      'Empuja con todo el pie (sobre todo talones) hasta casi estirar, sin bloquear las rodillas.',
-      'Expulsa el aire al empujar.'],
-    err: ['Despegar la cadera del asiento al bajar.', 'Bloquear las rodillas arriba.', 'Que las rodillas se vayan hacia dentro.'],
-    gem: 'Empuja con talones y planta, no con la punta de los pies: así el gemelo no trabaja de más.' },
-  Dumbbell_Bench_Press: { n: 'Press banca con mancuernas', g: 'Pecho',
-    pasos: ['Túmbate en el banco con una mancuerna en cada mano apoyada en los muslos.',
-      'Súbelas a la altura del pecho al tumbarte, palmas mirando a los pies.',
-      'Empuja hacia arriba hasta casi estirar los brazos, juntando un poco las mancuernas.',
-      'Baja despacio hasta que los codos queden algo por debajo del banco.',
-      'Pies firmes en el suelo y hombros pegados atrás todo el rato.'],
-    err: ['Abrir los codos a 90° del cuerpo (mejor a unos 45°).', 'Arquear mucho la espalda.', 'Bajar de golpe.'] },
-  'Wide-Grip_Lat_Pulldown': { n: 'Jalón al pecho', g: 'Espalda', maq: true,
-    pasos: ['Ajusta el rodillo para que sujete bien los muslos.',
-      'Agarra la barra algo más ancho que los hombros, palmas hacia delante.',
-      'Saca pecho, inclínate apenas hacia atrás.',
-      'Tira de la barra hacia la parte alta del pecho llevando los codos hacia abajo y atrás.',
-      'Sube despacio hasta estirar los brazos.'],
-    err: ['Tirar con los brazos en vez de con la espalda.', 'Echarse muy atrás y balancearse.', 'Bajar la barra por detrás de la nuca.'] },
-  Seated_Cable_Rows: { n: 'Remo sentado en polea', g: 'Espalda', maq: true,
-    pasos: ['Siéntate con los pies en los apoyos y rodillas algo flexionadas.',
-      'Agarra el maneral con la espalda recta.',
-      'Tira llevando el maneral al ombligo y junta los omóplatos.',
-      'Vuelve despacio estirando los brazos, sin redondear la espalda.'],
-    err: ['Balancear el tronco para tirar.', 'Encoger los hombros hacia las orejas.'] },
-  Plank: { n: 'Plancha', g: 'Core',
-    pasos: ['Apoya antebrazos (codos bajo los hombros) y puntas de los pies.',
-      'Cuerpo recto de cabeza a talones: aprieta glúteo y abdomen.',
-      'Respira normal y aguanta el tiempo marcado.'],
-    err: ['Cadera caída (carga la lumbar).', 'Culo muy arriba.', 'Aguantar la respiración.'] },
-  Seated_Calf_Raise: { n: 'Gemelo sentado (prevención)', g: 'Gemelo', maq: true,
-    pasos: ['Siéntate en la máquina con las rodillas bajo el apoyo y la punta del pie en el escalón.',
-      'Baja el talón despacio (3 s) hasta notar estiramiento suave.',
-      'Sube de puntillas lo más alto posible y aguanta 1 s arriba.',
-      'Peso ligero: es prevención, no fuerza.'],
-    err: ['Rebotar abajo.', 'Ir rápido.', 'Meter mucho peso.'],
-    gem: 'Este ejercicio es para cuidar el gemelo izquierdo. Nunca con dolor: si molesta ese día, sáltalo.' },
-  Goblet_Squat: { n: 'Sentadilla goblet', g: 'Pierna',
-    pasos: ['Sujeta una mancuerna o kettlebell pegada al pecho con las dos manos.',
-      'Pies algo más abiertos que las caderas, puntas un poco hacia fuera.',
-      'Baja como si te sentaras en una silla, pecho alto y rodillas en la línea de los pies.',
-      'Baja hasta donde mantengas la espalda recta y sube empujando el suelo.'],
-    err: ['Levantar los talones.', 'Redondear la espalda abajo.', 'Rodillas hacia dentro.'],
-    gem: 'Talones siempre apoyados. Si notas tirantez en el gemelo, pon un disco fino bajo los talones.' },
-  Seated_Dumbbell_Press: { n: 'Press de hombro sentado', g: 'Hombro',
-    pasos: ['Banco con respaldo vertical. Mancuernas a la altura de las orejas, palmas al frente.',
-      'Empuja hacia arriba hasta casi estirar los brazos.',
-      'Baja despacio hasta la altura de las orejas.',
-      'Espalda pegada al respaldo todo el rato.'],
-    err: ['Arquear la lumbar.', 'Bajar demasiado o de golpe.'] },
-  'One-Arm_Dumbbell_Row': { n: 'Remo con mancuerna a una mano', g: 'Espalda', uni: true,
-    pasos: ['Apoya rodilla y mano del mismo lado en el banco, espalda recta y paralela al suelo.',
-      'Con la otra mano coge la mancuerna con el brazo estirado.',
-      'Tira llevando el codo hacia la cadera, pegado al cuerpo.',
-      'Baja despacio. Haz todas las repes y cambia de lado.'],
-    err: ['Girar el tronco para subir.', 'Tirar hacia el hombro en vez de hacia la cadera.'] },
-  Seated_Leg_Curl: { n: 'Curl femoral sentado', g: 'Pierna', maq: true,
-    pasos: ['Ajusta la máquina: rodilla alineada con el eje y rodillo encima del tobillo.',
-      'Baja el rodillo doblando las rodillas todo lo que puedas.',
-      'Vuelve despacio sin dejar caer el peso.'],
-    err: ['Levantar la cadera del asiento.', 'Soltar de golpe.'],
-    gem: 'Mantén el pie relajado (no en punta) para no cargar el gemelo.' },
-  Pallof_Press: { n: 'Pallof press (antirrotación)', g: 'Core', uni: true, maq: true,
-    pasos: ['Polea a la altura del pecho. Ponte de lado a la polea, agarre con las dos manos pegado al pecho.',
-      'Separa un paso de la polea para notar tensión.',
-      'Estira los brazos al frente sin dejar que el cuerpo gire.',
-      'Aguanta 2 s y vuelve al pecho. Haz las repes y cambia de lado.'],
-    err: ['Dejar que el tronco gire hacia la polea.', 'Usar demasiado peso.'] },
-  'Stiff-Legged_Dumbbell_Deadlift': { n: 'Peso muerto rumano con mancuernas', g: 'Pierna',
-    pasos: ['De pie con una mancuerna en cada mano delante de los muslos, rodillas un poco flexionadas.',
-      'Echa la cadera hacia atrás bajando las mancuernas pegadas a las piernas.',
-      'Baja hasta notar estiramiento en la parte de atrás del muslo (más o menos media tibia).',
-      'Sube empujando la cadera hacia delante y apretando el glúteo.'],
-    err: ['Redondear la espalda.', 'Doblar mucho las rodillas (se convierte en sentadilla).', 'Separar las mancuernas de las piernas.'] },
-  Incline_Dumbbell_Press: { n: 'Press inclinado con mancuernas', g: 'Pecho',
-    pasos: ['Banco inclinado a unos 30°. Mancuernas a la altura del pecho alto.',
-      'Empuja hacia arriba y un poco hacia dentro.',
-      'Baja despacio hasta notar estiramiento en el pecho.',
-      'Si en el Sparta hay máquina de press inclinado, vale igual.'],
-    err: ['Inclinar demasiado el banco (trabaja más el hombro).', 'Despegar la espalda.'] },
-  'Close-Grip_Front_Lat_Pulldown': { n: 'Jalón agarre estrecho', g: 'Espalda', maq: true,
-    pasos: ['Pon el maneral estrecho (agarre neutro, palmas enfrentadas) si lo hay.',
-      'Sentado, muslos sujetos, pecho alto.',
-      'Tira hacia la parte alta del pecho llevando los codos pegados al cuerpo.',
-      'Sube despacio hasta estirar.'],
-    err: ['Balancear el cuerpo.', 'Encoger los hombros.'] },
-  Leg_Extensions: { n: 'Extensión de cuádriceps', g: 'Pierna', maq: true,
-    pasos: ['Ajusta el respaldo: rodilla alineada con el eje de la máquina, rodillo sobre el tobillo.',
-      'Estira las piernas hasta arriba y aprieta 1 s.',
-      'Baja despacio en 2-3 s.'],
-    err: ['Dar patadas rápidas.', 'Levantar la cadera.'] },
-  Dead_Bug: { n: 'Dead bug (bicho muerto)', g: 'Core',
-    pasos: ['Boca arriba, brazos estirados al techo y rodillas a 90° encima de la cadera.',
-      'Pega la zona lumbar al suelo.',
-      'Estira a la vez brazo derecho atrás y pierna izquierda al frente, sin que la lumbar se despegue.',
-      'Vuelve y cambia de lado. Lento y controlado.'],
-    err: ['Arquear la espalda.', 'Ir rápido.'] },
-  Butt_Lift_Bridge: { n: 'Puente de glúteo', g: 'Glúteo',
-    pasos: ['Boca arriba, rodillas dobladas y pies apoyados cerca del culo.',
-      'Empuja con los talones y sube la cadera hasta alinear rodillas, cadera y hombros.',
-      'Aprieta el glúteo 2 s arriba y baja despacio.'],
-    err: ['Arquear la lumbar arriba.', 'Empujar con las puntas.'] },
-  Dumbbell_Step_Ups: { n: 'Subida al cajón con mancuernas', g: 'Pierna', uni: true,
-    pasos: ['Cajón o banco a la altura de la rodilla (o algo menos). Una mancuerna en cada mano.',
-      'Pon un pie entero encima del cajón.',
-      'Sube empujando con esa pierna, sin impulsarte con la de abajo.',
-      'Baja despacio. Haz las repes con una pierna y cambia.'],
-    err: ['Impulsarse con el pie de abajo.', 'Rodilla hacia dentro.'],
-    gem: 'Apoya el pie entero (talón incluido) en el cajón.' },
-  Side_Bridge: { n: 'Plancha lateral', g: 'Core', uni: true,
-    pasos: ['De lado, apoyado en el antebrazo (codo bajo el hombro) y el canto del pie.',
-      'Sube la cadera hasta que el cuerpo quede recto.',
-      'Aguanta y cambia de lado. Si cuesta, apoya las rodillas.'],
-    err: ['Dejar caer la cadera.', 'Girar el tronco.'] },
-  // CARDIO
-  Bicycling_Stationary: { n: 'Bici estática', g: 'Cardio', maq: true,
-    pasos: ['Ajusta el sillín: con el pedal abajo, la rodilla queda casi estirada.',
-      'Pedalea a ritmo cómodo: tienes que poder hablar (zona 2).',
-      'Cadencia ágil, unas 85-95 pedaladas por minuto.'],
-    err: ['Sillín bajo.', 'Ir demasiado fuerte en los días de zona 2.'] },
-  Elliptical_Trainer: { n: 'Elíptica', g: 'Cardio', maq: true,
-    pasos: ['Pies enteros sobre los pedales.', 'Ritmo cómodo, espalda recta, usa también los brazos.', 'Puedes hablar sin ahogarte.'],
-    err: ['Apoyarse con todo el peso en las manos.'],
-    gem: 'Mantén el talón apoyado en el pedal todo el movimiento.' },
-  Rowing_Stationary: { n: 'Remo ergómetro', g: 'Cardio', maq: true,
-    pasos: ['Pies sujetos con la cinta a la altura del metatarso.',
-      'Orden: piernas empujan, luego el tronco se echa algo atrás, luego tiran los brazos.',
-      'Vuelta al revés: brazos, tronco, piernas.', 'Ritmo suave, unas 20-24 paladas por minuto.'],
-    err: ['Tirar solo con los brazos.', 'Redondear la espalda.'] },
-};
-
-// ---------- ESTIRAMIENTOS ----------
-// s = segundos; lados = se hace a cada lado
 const ST = {
-  Standing_Gastrocnemius_Calf_Stretch: { n: 'Gemelo contra la pared', s: 30, lados: true, t: 'Manos en la pared, pierna de atrás estirada y talón en el suelo. Echa la cadera hacia delante. Suave, sin rebotar.' },
-  Standing_Soleus_And_Achilles_Stretch: { n: 'Sóleo y Aquiles', s: 30, lados: true, t: 'Igual que el anterior pero doblando un poco la rodilla de atrás. Talón apoyado.' },
-  Hamstring_Stretch: { n: 'Isquiotibiales', s: 30, lados: true, t: 'Pierna estirada apoyada, inclina el tronco hacia delante con la espalda recta hasta notar el estiramiento.' },
-  Quad_Stretch: { n: 'Cuádriceps', s: 30, lados: true, t: 'De pie, coge el empeine y lleva el talón al culo. Rodillas juntas, apóyate en algo.' },
-  Kneeling_Hip_Flexor: { n: 'Flexor de cadera', s: 30, lados: true, t: 'Rodilla atrás en el suelo, la otra pierna delante a 90°. Aprieta el glúteo y lleva la cadera adelante.' },
-  Chest_And_Front_Of_Shoulder_Stretch: { n: 'Pecho y hombro', s: 30, lados: true, t: 'Brazo apoyado en una columna o marco, gira el cuerpo hacia el lado contrario.' },
-  Upper_Back_Stretch: { n: 'Espalda alta', s: 40, t: 'Entrelaza las manos al frente, redondea la espalda y empuja las manos lejos.' },
-  Cat_Stretch: { n: 'Gato-camello', s: 60, t: 'A cuatro patas. Alterna despacio: espalda redonda hacia arriba y luego hundida. Respira con el movimiento.' },
-  Worlds_Greatest_Stretch: { n: 'El mejor estiramiento del mundo', s: 60, lados: true, t: 'Zancada larga, mano contraria al suelo, gira el tronco abriendo el brazo al techo. 5 repeticiones lentas.' },
-  Runners_Stretch: { n: 'Estiramiento del corredor', s: 40, lados: true, t: 'Zancada con manos en el suelo, lleva la cadera atrás estirando la pierna de delante.' },
-  IT_Band_and_Glute_Stretch: { n: 'Glúteo y cintilla', s: 40, lados: true, t: 'Tumbado, cruza un tobillo sobre la rodilla contraria y tira de la pierna hacia el pecho.' },
-  Seated_Floor_Hamstring_Stretch: { n: 'Isquios sentado', s: 60, t: 'Sentado, piernas estiradas, inclínate hacia los pies con la espalda larga.' },
-  Calf_Stretch_Hands_Against_Wall: { n: 'Gemelo en pared (suave)', s: 40, lados: true, t: 'Manos en la pared, pierna atrás estirada. Muy suave en el lado izquierdo.' },
-  Seated_Calf_Stretch: { n: 'Gemelo sentado con toalla', s: 40, lados: true, t: 'Sentado, toalla en la planta del pie, tira suave hacia ti con la pierna estirada.' },
-  On_Your_Side_Quad_Stretch: { n: 'Cuádriceps de lado', s: 40, lados: true, t: 'Tumbado de lado, coge el empeine de arriba y lleva el talón al culo.' },
-  Spinal_Stretch: { n: 'Torsión de espalda', s: 40, lados: true, t: 'Sentado, cruza una pierna y gira el tronco hacia ese lado con la espalda recta.' },
-  Side_Lying_Groin_Stretch: { n: 'Aductores', s: 60, t: 'Boca arriba, junta las plantas de los pies y deja caer las rodillas a los lados.' },
-  Overhead_Stretch: { n: 'Estiramiento arriba', s: 30, t: 'De pie, brazos arriba entrelazados, estírate hacia el techo e inclínate un poco a cada lado.' },
+ "Standing_Gastrocnemius_Calf_Stretch": {
+  "n": "Gemelo contra la pared",
+  "s": 30,
+  "lados": true,
+  "t": "Manos en la pared, pierna de atrás estirada y talón en el suelo. Echa la cadera hacia delante. Suave, sin rebotar."
+ },
+ "Standing_Soleus_And_Achilles_Stretch": {
+  "n": "Sóleo y Aquiles",
+  "s": 30,
+  "lados": true,
+  "t": "Igual que el anterior pero doblando un poco la rodilla de atrás. Talón apoyado."
+ },
+ "Hamstring_Stretch": {
+  "n": "Isquiotibiales",
+  "s": 30,
+  "lados": true,
+  "t": "Pierna estirada apoyada, inclina el tronco hacia delante con la espalda recta hasta notar el estiramiento."
+ },
+ "Quad_Stretch": {
+  "n": "Cuádriceps",
+  "s": 30,
+  "lados": true,
+  "t": "De pie, coge el empeine y lleva el talón al culo. Rodillas juntas, apóyate en algo."
+ },
+ "Kneeling_Hip_Flexor": {
+  "n": "Flexor de cadera",
+  "s": 30,
+  "lados": true,
+  "t": "Rodilla atrás en el suelo, la otra pierna delante a 90°. Aprieta el glúteo y lleva la cadera adelante."
+ },
+ "Chest_And_Front_Of_Shoulder_Stretch": {
+  "n": "Pecho y hombro",
+  "s": 30,
+  "lados": true,
+  "t": "Brazo apoyado en una columna o marco, gira el cuerpo hacia el lado contrario."
+ },
+ "Upper_Back_Stretch": {
+  "n": "Espalda alta",
+  "s": 40,
+  "t": "Entrelaza las manos al frente, redondea la espalda y empuja las manos lejos."
+ },
+ "Cat_Stretch": {
+  "n": "Gato-camello",
+  "s": 60,
+  "t": "A cuatro patas. Alterna despacio: espalda redonda hacia arriba y luego hundida. Respira con el movimiento."
+ },
+ "Worlds_Greatest_Stretch": {
+  "n": "El mejor estiramiento del mundo",
+  "s": 60,
+  "lados": true,
+  "t": "Zancada larga, mano contraria al suelo, gira el tronco abriendo el brazo al techo. 5 repeticiones lentas."
+ },
+ "Runners_Stretch": {
+  "n": "Estiramiento del corredor",
+  "s": 40,
+  "lados": true,
+  "t": "Zancada con manos en el suelo, lleva la cadera atrás estirando la pierna de delante."
+ },
+ "IT_Band_and_Glute_Stretch": {
+  "n": "Glúteo y cintilla",
+  "s": 40,
+  "lados": true,
+  "t": "Tumbado, cruza un tobillo sobre la rodilla contraria y tira de la pierna hacia el pecho."
+ },
+ "Seated_Floor_Hamstring_Stretch": {
+  "n": "Isquios sentado",
+  "s": 60,
+  "t": "Sentado, piernas estiradas, inclínate hacia los pies con la espalda larga."
+ },
+ "Calf_Stretch_Hands_Against_Wall": {
+  "n": "Gemelo en pared (suave)",
+  "s": 40,
+  "lados": true,
+  "t": "Manos en la pared, pierna atrás estirada. Muy suave en el lado izquierdo."
+ },
+ "Seated_Calf_Stretch": {
+  "n": "Gemelo sentado con toalla",
+  "s": 40,
+  "lados": true,
+  "t": "Sentado, toalla en la planta del pie, tira suave hacia ti con la pierna estirada."
+ },
+ "On_Your_Side_Quad_Stretch": {
+  "n": "Cuádriceps de lado",
+  "s": 40,
+  "lados": true,
+  "t": "Tumbado de lado, coge el empeine de arriba y lleva el talón al culo."
+ },
+ "Spinal_Stretch": {
+  "n": "Torsión de espalda",
+  "s": 40,
+  "lados": true,
+  "t": "Sentado, cruza una pierna y gira el tronco hacia ese lado con la espalda recta."
+ },
+ "Side_Lying_Groin_Stretch": {
+  "n": "Aductores",
+  "s": 60,
+  "t": "Boca arriba, junta las plantas de los pies y deja caer las rodillas a los lados."
+ },
+ "Overhead_Stretch": {
+  "n": "Estiramiento arriba",
+  "s": 30,
+  "t": "De pie, brazos arriba entrelazados, estírate hacia el techo e inclínate un poco a cada lado."
+ }
 };
-const STRETCH_POST = ['Standing_Gastrocnemius_Calf_Stretch', 'Standing_Soleus_And_Achilles_Stretch', 'Hamstring_Stretch', 'Quad_Stretch', 'Kneeling_Hip_Flexor', 'Chest_And_Front_Of_Shoulder_Stretch', 'Upper_Back_Stretch'];
-const STRETCH_DOM = ['Cat_Stretch', 'Worlds_Greatest_Stretch', 'Runners_Stretch', 'IT_Band_and_Glute_Stretch', 'Seated_Floor_Hamstring_Stretch', 'Calf_Stretch_Hands_Against_Wall', 'Seated_Calf_Stretch', 'Kneeling_Hip_Flexor', 'On_Your_Side_Quad_Stretch', 'Spinal_Stretch', 'Side_Lying_Groin_Stretch', 'Chest_And_Front_Of_Shoulder_Stretch', 'Overhead_Stretch'];
+const STRETCH_POST = ["Standing_Gastrocnemius_Calf_Stretch","Standing_Soleus_And_Achilles_Stretch","Hamstring_Stretch","Quad_Stretch","Kneeling_Hip_Flexor","Chest_And_Front_Of_Shoulder_Stretch","Upper_Back_Stretch"];
 
-// ---------- SESIONES DE GIMNASIO ----------
-// r = [mín,máx] repes · seg = segundos · d = descanso (s)
-const GYM = {
-  A: { n: 'Fuerza A', items: [
-    { id: 'Leg_Press', s: 3, r: [10, 12], d: 90 },
-    { id: 'Seated_Leg_Curl', s: 3, r: [10, 12], d: 75 },
-    { id: 'Dumbbell_Bench_Press', s: 3, r: [8, 12], d: 90 },
-    { id: 'Wide-Grip_Lat_Pulldown', s: 3, r: [10, 12], d: 90 },
-    { id: 'Seated_Calf_Raise', s: 2, r: [15, 15], d: 60, fijo: true },
-    { id: 'Plank', s: 3, seg: [20, 40], d: 45 },
-  ], cardio: { id: 'Bicycling_Stationary', min: 12, t: 'Zona 2: suave, puedes hablar.' } },
-  B: { n: 'Fuerza B', items: [
-    { id: 'Goblet_Squat', s: 3, r: [8, 12], d: 90 },
-    { id: 'Seated_Dumbbell_Press', s: 3, r: [8, 12], d: 90 },
-    { id: 'One-Arm_Dumbbell_Row', s: 3, r: [10, 12], d: 60 },
-    { id: 'Seated_Leg_Curl', s: 3, r: [10, 12], d: 75 },
-    { id: 'Dumbbell_Step_Ups', s: 3, r: [8, 10], d: 75 },
-    { id: 'Pallof_Press', s: 2, r: [10, 10], d: 45 },
-  ], cardio: { id: 'Elliptical_Trainer', min: 12, t: 'Suave, con 4 cambios de 1 min algo más alegre.' } },
-  B2: { n: 'Fuerza ligera + intervalos', items: [
-    { id: 'Goblet_Squat', s: 3, r: [10, 10], d: 75 },
-    { id: 'Seated_Dumbbell_Press', s: 2, r: [10, 10], d: 75 },
-    { id: 'One-Arm_Dumbbell_Row', s: 2, r: [10, 10], d: 60 },
-    { id: 'Pallof_Press', s: 2, r: [10, 10], d: 45 },
-  ], cardio: { id: 'Bicycling_Stationary', min: 28, interval: true } },
-  C: { n: 'Fuerza C', items: [
-    { id: 'Butt_Lift_Bridge', s: 3, r: [12, 15], d: 60 },
-    { id: 'Incline_Dumbbell_Press', s: 3, r: [8, 12], d: 90 },
-    { id: 'Close-Grip_Front_Lat_Pulldown', s: 3, r: [10, 12], d: 90 },
-    { id: 'Leg_Extensions', s: 3, r: [12, 15], d: 60 },
-    { id: 'Seated_Calf_Raise', s: 2, r: [15, 15], d: 60, fijo: true },
-    { id: 'Dead_Bug', s: 3, r: [8, 8], d: 45 },
-  ], cardio: { id: 'Rowing_Stationary', min: 10, t: 'Suave y técnico.' } },
-  CT: { n: 'Fuerza C (trail)', items: [
-    { id: 'Goblet_Squat', s: 3, r: [8, 12], d: 90 },
-    { id: 'Dumbbell_Step_Ups', s: 3, r: [8, 10], d: 75 },
-    { id: 'Close-Grip_Front_Lat_Pulldown', s: 3, r: [10, 12], d: 90 },
-    { id: 'Butt_Lift_Bridge', s: 2, r: [12, 15], d: 60 },
-    { id: 'Seated_Calf_Raise', s: 2, r: [15, 15], d: 60, fijo: true },
-    { id: 'Side_Bridge', s: 2, seg: [20, 30], d: 45 },
-  ], cardio: { id: 'Rowing_Stationary', min: 10, t: 'Suave y técnico.' } },
-  INT: { n: 'Bici con intervalos', items: [], cardio: { id: 'Bicycling_Stationary', min: 28, interval: true } },
-  ACT: { n: 'Activación pre-Monegros', items: [], cardio: { id: 'Bicycling_Stationary', min: 30, t: '25 min muy suave con 3 cambios de 1 min alegre. Nada más: el sábado es el día.' } },
+// Fases y fines de semana hasta Monegros (la semana 25 es la de la prueba)
+const FASES = [
+ {
+  "n": "Vuelta",
+  "de": 1,
+  "a": 4,
+  "c": "#22c55e",
+  "t": "Volver a coger el hábito y la técnica. Todo suave."
+ },
+ {
+  "n": "Base",
+  "de": 5,
+  "a": 13,
+  "c": "#38bdf8",
+  "t": "Subir horas de BTT poco a poco y ganar fuerza."
+ },
+ {
+  "n": "Construcción",
+  "de": 14,
+  "a": 21,
+  "c": "#f97316",
+  "t": "Tiradas largas con desnivel. Gimnasio lunes y miércoles. El viernes, bici con intervalos suaves."
+ },
+ {
+  "n": "Afinado",
+  "de": 22,
+  "a": 25,
+  "c": "#eab308",
+  "t": "Bajar volumen para llegar fresco a Monegros."
+ },
+ {
+  "n": "Recuperación",
+  "de": 26,
+  "a": 27,
+  "c": "#a3a3a3",
+  "t": "Descansar después de Monegros."
+ }
+];
+// [tipo, horas, descripción] sábado / domingo
+const FINDE = [null,[["btt",1.5,"Rodaje suave por terreno cómodo. Solo volver a sentir la bici."],["trail",0.75,"Caminar rápido por monte con 6×(1 min trote / 3 min andar)."]],[["btt",1.75,"Rodaje suave, alguna subida tranquila."],["trail",0.83,"Caminar rápido con 6×(2 min trote / 3 min andar)."]],[["btt",2,"Rodaje suave con subidas cortas sentado."],["trail",0.92,"Caminar rápido con 6×(3 min trote / 2 min andar)."]],[["btt",1.5,"SEMANA DE DESCANSO: paseo suave."],["walk",0.75,"Caminata por monte sin trotar."]],[["btt",2.25,"Unos 400 m de desnivel a ritmo cómodo."],["trail",1,"5×(4 min trote / 2 min andar). Subidas andando."]],[["btt",2.5,"Unos 500 m de desnivel."],["trail",1,"4×(6 min trote / 2 min andar)."]],[["btt",2.75,"Unos 550 m de desnivel."],["trail",1.1,"3×(10 min trote / 2 min andar)."]],[["btt",2,"SEMANA DE DESCANSO: suave."],["trail",0.75,"Trote suave 20-25 min seguidos si el gemelo va bien. Si no, andar."]],[["btt",3,"Unos 600 m de desnivel. Practica comer cada hora."],["trail",1,"30-40 min de trote continuo por terreno fácil."]],[["btt",3.25,"Unos 650 m de desnivel."],["btt",1.75,"Rodaje suave de recuperación."]],[["btt",3.5,"Unos 700 m de desnivel."],["trail",1.15,"45 min de trote con las subidas andando."]],[["btt",2.5,"SEMANA DE DESCANSO: suave."],["trail",0.83,"Trote suave."]],[["btt",3.5,"Unos 750 m. Ritmo constante en pistas largas."],["btt",2,"Rodaje suave."]],[["btt",3.75,"Unos 800 m de desnivel."],["btt",2,"Rodaje suave."]],[["btt",4,"Unos 900 m. Come y bebe como en Monegros."],["trail",1.25,"Trote suave con subidas andando."]],[["btt",3,"SEMANA DE DESCANSO: suave."],["btt",1.5,"Paseo suave."]],[["btt",4.25,"Pistas largas a ritmo de Monegros (constante, sin cebarse)."],["btt",2.5,"Rodaje suave."]],[["btt",4.5,"Unos 1.000 m de desnivel."],["trail",1.25,"Trote suave."]],[["btt",5,"Unos 90 km. La más larga hasta ahora."],["btt",2,"Rodaje muy suave."]],[["btt",3,"SEMANA DE DESCANSO: suave."],["trail",1,"Trote suave."]],[["btt",5,"ENSAYO GENERAL: unos 100 km con la comida, bebida y ritmo de Monegros."],["btt",1.5,"Recuperación muy suave."]],[["btt",4,"Larga a ritmo cómodo."],["btt",2,"Rodaje suave."]],[["btt",3,"Con 3×15 min a ritmo de carrera."],["trail",0.83,"Trote suave."]],[["btt",2,"Con 3×10 min a ritmo de carrera. Revisa la bici."],["btt",1.5,"Rodaje muy suave."]],[["race",7,"ORBEA MONEGROS (larga). Come cada hora y bebe cada 15 min desde el principio."],["walk",0.75,"Paseo suave o descanso total."]]];
+
+// ---------- SESIONES TIPO (huecos por patrón; el generador elige el ejercicio) ----------
+const PLANTILLAS = {
+  A:  { n: 'Cuerpo completo A', slots: ['rodilla', 'empuje_h', 'tiron_v', 'femoral', 'core', 'hombro_lat', 'gemelo', 'biceps'] },
+  B:  { n: 'Cuerpo completo B', slots: ['cadera', 'tiron_h', 'empuje_v', 'unilateral', 'core', 'posterior', 'gemelo', 'triceps'] },
+  C:  { n: 'Cuerpo completo C', slots: ['rodilla', 'empuje_inc', 'tiron_v', 'cadera', 'core', 'cuadriceps', 'gemelo', 'posterior'] },
+  U1: { n: 'Tren superior 1', slots: ['empuje_h', 'tiron_h', 'empuje_v', 'tiron_v', 'core', 'hombro_lat', 'biceps', 'triceps'] },
+  L1: { n: 'Pierna 1', slots: ['rodilla', 'femoral', 'cadera', 'cuadriceps', 'core', 'gemelo', 'gluteo', 'unilateral'] },
+  U2: { n: 'Tren superior 2', slots: ['empuje_inc', 'tiron_v', 'tiron_h', 'empuje_v', 'core', 'posterior', 'triceps', 'biceps'] },
+  L2: { n: 'Pierna 2', slots: ['unilateral', 'cadera', 'femoral', 'rodilla', 'core', 'gemelo', 'gluteo', 'cuadriceps'] },
 };
+const PATRON_N = { rodilla: 'Pierna (empuje)', unilateral: 'Pierna a una', cadera: 'Glúteo (cadera)', gluteo: 'Glúteo', femoral: 'Femoral', cuadriceps: 'Cuádriceps', gemelo: 'Gemelo', empuje_h: 'Pecho', empuje_inc: 'Pecho alto', aperturas: 'Pecho (aperturas)', empuje_v: 'Hombro', hombro_lat: 'Hombro lateral', tiron_v: 'Espalda (jalón)', tiron_h: 'Espalda (remo)', posterior: 'Hombro posterior', biceps: 'Bíceps', triceps: 'Tríceps', core: 'Core', cardio: 'Cardio' };
+const COMPUESTOS = ['rodilla', 'unilateral', 'cadera', 'empuje_h', 'empuje_inc', 'empuje_v', 'tiron_v', 'tiron_h'];
+const MUSCULOS = ['Pierna', 'Glúteo', 'Pecho', 'Espalda', 'Hombro', 'Brazos', 'Core'];
 
 const CALENTAMIENTO = '8 min de bici estática suave + 5 gato-camello + 3 "mejor estiramiento del mundo" por lado.';
+const INTERVALOS = '8 min suave · 5 × (1 min 30 s alegre + 2 min suave) · 3 min muy suave. Alegre = respiras fuerte pero aún dices frases cortas.';
 
-// ---------- FASES ----------
-const FASES = [
-  { n: 'Vuelta', de: 1, a: 4, c: '#22c55e', t: 'Volver a coger el hábito y la técnica. Todo suave.' },
-  { n: 'Base', de: 5, a: 13, c: '#38bdf8', t: 'Subir horas de BTT poco a poco y ganar fuerza.' },
-  { n: 'Construcción', de: 14, a: 21, c: '#f97316', t: 'Tiradas largas con desnivel. Gimnasio lunes y miércoles. El viernes, bici con intervalos suaves.' },
-  { n: 'Afinado', de: 22, a: 25, c: '#eab308', t: 'Bajar volumen para llegar fresco a Monegros.' },
-  { n: 'Recuperación', de: 26, a: 27, c: '#a3a3a3', t: 'Descansar después de Monegros.' },
-  { n: 'Transición a trail', de: 28, a: 35, c: '#a78bfa', t: 'El trail pasa a ser la tirada principal.' },
-  { n: 'Construcción trail', de: 36, a: 44, c: '#ec4899', t: 'Tiradas largas de trail con desnivel.' },
-  { n: 'Específico ultra', de: 45, a: 52, c: '#ef4444', t: 'Ensayos largos. Cuando elijas el ultratrail, ajustamos estas semanas.' },
-];
-
-// ---------- FINES DE SEMANA hasta Monegros ----------
-// [tipo, horas, descripción] sábado / domingo
-const FINDE = [
-  null,
-  [['btt', 1.5, 'Rodaje suave por terreno cómodo. Solo volver a sentir la bici.'], ['trail', 0.75, 'Caminar rápido por monte con 6×(1 min trote / 3 min andar).']],
-  [['btt', 1.75, 'Rodaje suave, alguna subida tranquila.'], ['trail', 0.83, 'Caminar rápido con 6×(2 min trote / 3 min andar).']],
-  [['btt', 2, 'Rodaje suave con subidas cortas sentado.'], ['trail', 0.92, 'Caminar rápido con 6×(3 min trote / 2 min andar).']],
-  [['btt', 1.5, 'SEMANA DE DESCANSO: paseo suave.'], ['walk', 0.75, 'Caminata por monte sin trotar.']],
-  [['btt', 2.25, 'Unos 400 m de desnivel a ritmo cómodo.'], ['trail', 1, '5×(4 min trote / 2 min andar). Subidas andando.']],
-  [['btt', 2.5, 'Unos 500 m de desnivel.'], ['trail', 1, '4×(6 min trote / 2 min andar).']],
-  [['btt', 2.75, 'Unos 550 m de desnivel.'], ['trail', 1.1, '3×(10 min trote / 2 min andar).']],
-  [['btt', 2, 'SEMANA DE DESCANSO: suave.'], ['trail', 0.75, 'Trote suave 20-25 min seguidos si el gemelo va bien. Si no, andar.']],
-  [['btt', 3, 'Unos 600 m de desnivel. Practica comer cada hora.'], ['trail', 1, '30-40 min de trote continuo por terreno fácil.']],
-  [['btt', 3.25, 'Unos 650 m de desnivel.'], ['btt', 1.75, 'Rodaje suave de recuperación.']],
-  [['btt', 3.5, 'Unos 700 m de desnivel.'], ['trail', 1.15, '45 min de trote con las subidas andando.']],
-  [['btt', 2.5, 'SEMANA DE DESCANSO: suave.'], ['trail', 0.83, 'Trote suave.']],
-  [['btt', 3.5, 'Unos 750 m. Ritmo constante en pistas largas.'], ['btt', 2, 'Rodaje suave.']],
-  [['btt', 3.75, 'Unos 800 m de desnivel.'], ['btt', 2, 'Rodaje suave.']],
-  [['btt', 4, 'Unos 900 m. Come y bebe como en Monegros.'], ['trail', 1.25, 'Trote suave con subidas andando.']],
-  [['btt', 3, 'SEMANA DE DESCANSO: suave.'], ['btt', 1.5, 'Paseo suave.']],
-  [['btt', 4.25, 'Pistas largas a ritmo de Monegros (constante, sin cebarse).'], ['btt', 2.5, 'Rodaje suave.']],
-  [['btt', 4.5, 'Unos 1.000 m de desnivel.'], ['trail', 1.25, 'Trote suave.']],
-  [['btt', 5, 'Unos 90 km. La más larga hasta ahora.'], ['btt', 2, 'Rodaje muy suave.']],
-  [['btt', 3, 'SEMANA DE DESCANSO: suave.'], ['trail', 1, 'Trote suave.']],
-  [['btt', 5, 'ENSAYO GENERAL: unos 100 km con la comida, bebida y ritmo de Monegros.'], ['btt', 1.5, 'Recuperación muy suave.']],
-  [['btt', 4, 'Larga a ritmo cómodo.'], ['btt', 2, 'Rodaje suave.']],
-  [['btt', 3, 'Con 3×15 min a ritmo de carrera.'], ['trail', 0.83, 'Trote suave.']],
-  [['btt', 2, 'Con 3×10 min a ritmo de carrera. Revisa la bici.'], ['btt', 1.5, 'Rodaje muy suave.']],
-  [['race', 7, 'ORBEA MONEGROS (larga). Come cada hora y bebe cada 15 min desde el principio.'], ['walk', 0.75, 'Paseo suave o descanso total.']],
-];
-
-// ---------- DESAYUNOS después del gimnasio ----------
-const DESAYUNOS = [
-  { n: 'Tostadas con pavo + yogur griego', t: '2 tostadas con pavo, 1 yogur griego natural. Fruta si te apetece.' },
-  { n: 'Pincho de jamón y queso + vaso de leche', t: 'Pan del tamaño de un pincho, jamón y queso, un vaso de leche.' },
-  { n: 'Revuelto de 2-3 huevos con tostada y tomate', t: 'Revuelto o tortilla francesa, 1 tostada con tomate.' },
-  { n: 'Tostada de atún y tomate + yogur', t: '1-2 tostadas con atún y tomate, 1 yogur.' },
-  { n: 'Corn flakes con leche + yogur griego + plátano', t: 'El de los días duros: más hidrato para recuperar.', duro: true },
+// ---------- RECETAS (valores aproximados por ración) ----------
+const RECETAS = [
+  { n: 'Tostadas con pavo + yogur griego', tipo: 'Desayuno', kcal: 420, p: 30, c: 45, g: 12, ing: '2 rebanadas de pan, 80 g de pavo, 1 yogur griego natural, fruta opcional', t: 'Tuesta el pan, pon el pavo encima y acompaña con el yogur.' },
+  { n: 'Pincho de jamón y queso + leche', tipo: 'Desayuno', kcal: 480, p: 28, c: 45, g: 20, ing: 'Pan tamaño pincho, 40 g de jamón, 1 loncha de queso, 1 vaso de leche', t: 'Monta el pincho y tómalo con el vaso de leche.' },
+  { n: 'Revuelto de huevos con tostada y tomate', tipo: 'Desayuno', kcal: 400, p: 24, c: 25, g: 22, ing: '3 huevos, 1 rebanada de pan, tomate rallado, aceite', t: 'Revuelve los huevos a fuego suave. Tostada con tomate y un hilo de aceite.' },
+  { n: 'Tostada de atún y tomate + yogur', tipo: 'Desayuno', kcal: 380, p: 30, c: 40, g: 10, ing: '2 rebanadas de pan, 1 lata de atún al natural, tomate, 1 yogur', t: 'Tomate en la tostada, atún encima. Yogur de postre.' },
+  { n: 'Corn flakes con leche, yogur griego y plátano', tipo: 'Desayuno', kcal: 560, p: 25, c: 90, g: 10, ing: '50 g de corn flakes, 250 ml de leche, 1 yogur griego, 1 plátano', t: 'El de los días duros: más hidrato para recuperar.' },
+  { n: 'Pollo a la plancha con arroz y ensalada', tipo: 'Comida', kcal: 600, p: 45, c: 70, g: 14, ing: '150 g de pechuga, 80 g de arroz (en crudo), lechuga, tomate, aceite', t: 'Arroz cocido, pollo a la plancha con sal y ajo, ensalada aliñada.' },
+  { n: 'Lentejas con verduras', tipo: 'Comida', kcal: 550, p: 28, c: 70, g: 15, ing: '80 g de lentejas, zanahoria, puerro, pimiento, 30 g de chorizo, pimentón', t: 'Sofríe la verdura, añade lentejas y agua. 35 min a fuego medio.' },
+  { n: 'Pasta con atún y tomate', tipo: 'Comida', kcal: 650, p: 35, c: 95, g: 12, ing: '100 g de pasta (en crudo), 1 lata grande de atún, tomate triturado, cebolla', t: 'Ideal la víspera de una salida larga. Salsa de tomate y cebolla con el atún.' },
+  { n: 'Merluza al horno con patata y pimiento', tipo: 'Comida', kcal: 480, p: 35, c: 45, g: 15, ing: '200 g de merluza, 1 patata mediana, pimiento, aceite, ajo', t: 'Patata y pimiento en láminas 20 min al horno, encima la merluza 10 min más.' },
+  { n: 'Garbanzos con espinacas y huevo', tipo: 'Comida', kcal: 520, p: 26, c: 60, g: 16, ing: '1 bote de garbanzos (200 g escurridos), espinacas, 1 huevo cocido, ajo, comino', t: 'Saltea ajo y espinacas, añade garbanzos y comino, huevo picado por encima.' },
+  { n: 'Bacalao a la vizcaína con arroz', tipo: 'Comida', kcal: 560, p: 38, c: 60, g: 16, ing: '180 g de bacalao desalado, salsa vizcaína, 60 g de arroz (en crudo)', t: 'Bacalao 10 min en la salsa a fuego suave. Con arroz blanco.' },
+  { n: 'Tortilla francesa con ensalada y pan', tipo: 'Cena', kcal: 380, p: 20, c: 30, g: 20, ing: '2 huevos, ensalada variada, 1 rebanada de pan', t: 'Rápida y con proteína.' },
+  { n: 'Salmón con verduras al horno', tipo: 'Cena', kcal: 450, p: 32, c: 15, g: 28, ing: '150 g de salmón, calabacín, cebolla, pimiento', t: 'Todo junto en la bandeja, 18 min a 200 °C.' },
+  { n: 'Crema de calabacín y pavo a la plancha', tipo: 'Cena', kcal: 330, p: 30, c: 20, g: 13, ing: '1 calabacín, 1 puerro, 1 quesito, 120 g de pavo', t: 'Cuece y tritura la verdura con el quesito. Pavo a la plancha aparte.' },
+  { n: 'Yogur griego con nueces y fruta', tipo: 'Recena', kcal: 280, p: 14, c: 25, g: 14, ing: '1 yogur griego, 3 nueces, 1 pieza de fruta', t: 'Si llegas con hambre a la noche.' },
+  { n: 'Bocadillo para la salida', tipo: 'Salida', kcal: 450, p: 22, c: 60, g: 12, ing: 'Media barra, jamón o pavo, plátano y dátiles aparte', t: 'Para las tiradas largas: come algo cada hora, no esperes a tener hambre.' },
 ];
