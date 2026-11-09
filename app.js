@@ -238,11 +238,10 @@ function render() {
 
 // ---------- HOY ----------
 function vHoy(m) {
-  const t = today(); const P = DB.perfil; const f = P.finde ? fase(t) : null; const S = stats();
-  m.append(el(cabeceraNivel(S)));
+  const t = today(); const P = DB.perfil; const f = P.finde ? fase(t) : null;
   m.append(el(`<div class="fecha"><span>${DN[dayIdx(t)]}, ${fmt(t)}</span>${f ? `<span class="ph" style="--c:${f.c}">${f.n}${descarga(t) ? ' · descarga' : ''}</span>` : descarga(t) ? '<span class="ph" style="--c:#a3a3a3">Semana de descarga</span>' : ''}</div>`));
   if (DB.activo) { const c = el(`<button class="card warn item"><span class="ic">⏱️</span><span class="tx"><b>Entreno en marcha</b><span>${DB.activo.n} · toca para seguir</span></span><span class="st">›</span></button>`); c.onclick = abrirEntreno; m.append(c); }
-  if (chequeoPendiente()) { const c = el(`<button class="card note item"><span class="ic">📋</span><span class="tx"><b>Chequeo de la semana · +${PUNTOS.chequeo} pts</b><span>Cómo te has recuperado y cuánto pesas. 1 minuto.</span></span><span class="st">›</span></button>`); c.onclick = abrirChequeo; m.append(c); }
+  if (chequeoPendiente()) { const c = el(`<button class="card note item"><span class="ic">📋</span><span class="tx"><b>Chequeo de la semana</b><span>Cómo te has recuperado y cuánto pesas. 1 minuto.</span></span><span class="st">›</span></button>`); c.onclick = abrirChequeo; m.append(c); }
   // anillos de la semana
   const R = retoSemana(monday(t));
   let minP = 0, minH = 0; for (let i = 0; i < 7; i++) { const d = addD(monday(t), i); const s = salidaDe(d); if (s) minP += s.h * 60; const r = DB.salidas[key(d)]; if (r) minH += r.min; }
@@ -251,11 +250,9 @@ function vHoy(m) {
   const fPeso = P.objetivo === 'bajar' && kg0 > P.pesoObj ? (kg0 - kgA) / (kg0 - P.pesoObj) : null;
   m.append(el(`<div class="rings">${anillo(R.gP ? R.gH / R.gP : 0, '#f97316', `${R.gH}/${R.gP}`, 'Gimnasio')}
     ${P.finde ? anillo(minP ? minH / minP : 0, '#38bdf8', hm(minH / 60).replace(' min', '′'), 'Bici y monte') : ''}
-    ${fPeso != null ? anillo(fPeso, '#22c55e', `${num(kg0 - kgA)}`, 'kg bajados') : anillo(R.frac, '#22c55e', `${Math.round(R.frac * 100)}%`, 'Reto')}</div>`));
+    ${fPeso != null ? anillo(fPeso, '#22c55e', `${num(kg0 - kgA)}`, 'kg bajados') : anillo(R.frac, '#22c55e', `${Math.round(R.frac * 100)}%`, 'Semana')}</div>`));
   m.append(tarjetaHoy(t));
   const cm = camino(); if (cm) m.append(el(cm));
-  const rt = tarjetaReto(); if (rt) m.append(el(rt));
-  m.append(filaMedallas());
   const N = nutri(); const ex = extraDia(t);
   const c = el(`<button class="card item"><span class="ic">🍽️</span><span class="tx"><b>${r10(N.kcal + (ex ? ex.kcal : 0))} kcal hoy</b><span>${N.p} g de proteína${ex ? ` · +${ex.kcal} por la salida` : ''}</span></span><span class="st">›</span></button>`);
   c.onclick = () => { tab = 'comida'; render(); }; m.append(c);
@@ -269,7 +266,7 @@ function tarjetaHoy(t) {
     const ses = x.ses; const h = hechoGym(t); const ids = ses.items.map((y, i) => ejDe(ses, i));
     const ult = DB.logs.filter(l => l.k === ses.k).pop(); const sube = ult && (ult.res || []).find(r => /^Sube/.test(r.msg || '') && ids.includes(r.id)); const rec = sube ? sube.id : null;
     const c = el(`<div class="hcard ${h ? 'ok' : ''}"><div class="hfoto">${ids.slice(0, 3).map(id => `<img src="${img(id)}" alt="">`).join('')}<span class="hpill">Hoy · ${ses.n}</span></div>
-      <div class="hbody"><div><b>${h ? `Hecho · ${Math.round(h.dur)} min · ${num(h.vol / 1000)} t` : `${ses.items.length} ejercicios · ~${DB.perfil.min} min`}</b><small>${h ? '¡Buen trabajo!' : `+${PUNTOS.gym} puntos${rec ? ` · toca subir peso en ${LIB[rec].n.toLowerCase()}` : ''}`}</small></div>
+      <div class="hbody"><div><b>${h ? `Hecho · ${Math.round(h.dur)} min · ${num(h.vol / 1000)} t` : `${ses.items.length} ejercicios · ~${DB.perfil.min} min`}</b><small>${h ? 'Toca para ver el resumen' : rec ? `Hoy toca subir peso en ${LIB[rec].n.toLowerCase()}` : 'Toca las fotos para ver los ejercicios'}</small></div>
       ${h ? '<span class="st">✓</span>' : DB.activo ? '' : '<button class="btn">Empezar</button>'}</div></div>`);
     c.querySelector('.hfoto').onclick = () => h ? verResumen(h) : verSesion(ses, t);
     const b = c.querySelector('.hbody .btn'); if (b) b.onclick = () => empezar(ses, t);
@@ -281,7 +278,7 @@ function tarjetaHoy(t) {
   if (x.tipo === 'salida') {
     const s = x.sal; const r = DB.salidas[key(t)]; const [ic, n] = TIPO[s.tipo];
     const c = el(`<div class="hcard out ${r ? 'ok' : ''}"><div class="hfoto big"><span class="hic">${ic}</span><span class="hpill">Hoy · ${n} · ${hm(s.h)}</span></div>
-      <div class="hbody"><div><b>${r ? `Hecho · ${r.min} min · ${r.sens}` : s.t}</b><small>${r ? '¡Bien!' : `+${Math.round(s.h * 30)} puntos`}</small></div>${r ? '<span class="st">✓</span>' : '<button class="btn">Apuntar</button>'}</div></div>`);
+      <div class="hbody"><div><b>${r ? `Hecho · ${r.min} min · ${r.sens}` : s.t}</b><small>${r ? 'Toca para cambiarlo' : 'Cuando vuelvas, apunta los minutos'}</small></div>${r ? '<span class="st">✓</span>' : '<button class="btn">Apuntar</button>'}</div></div>`);
     c.onclick = () => apuntarSalida(t, s); box.append(c); return box;
   }
   box.append(tarjetaDia(t, true)); return box;
@@ -301,7 +298,7 @@ function tarjetaDia(d, grande) {
   if (x.tipo === 'cardio') {
     const h = hechoGym(d);
     const c = el(`<button class="card item str ${h ? 'ok' : ''}"><span class="ic">🚴</span><span class="tx"><b>${lab}${x.n}</b><span>${x.t}</span></span><span class="st">${h ? '✓' : ''}</span></button>`);
-    c.onclick = () => { if (h) return; if (confirm('¿Marcar como hecho?')) { DB.logs.push({ fecha: key(d), ses: x.n, dur: 30, vol: 0, items: [], cardio: true }); save(); render(); logros(); } };
+    c.onclick = () => { if (h) return; if (confirm('¿Marcar como hecho?')) { DB.logs.push({ fecha: key(d), ses: x.n, dur: 30, vol: 0, items: [], cardio: true }); save(); render(); } };
     return c;
   }
   if (x.tipo === 'salida') return tarjetaSalida(d, x.sal, lab);
@@ -325,7 +322,7 @@ function apuntarSalida(d, s) {
   let sens = r.sens || 'Bien';
   o.body.querySelectorAll('#ssens button').forEach(b => b.onclick = () => { sens = b.textContent; o.body.querySelectorAll('#ssens button').forEach(x => x.classList.toggle('sel', x === b)); });
   o.body.querySelector('#sok').onclick = () => {
-    DB.salidas[key(d)] = { min: +o.body.querySelector('#smin').value || 0, sens, tipo: s.tipo }; save(); o.close(); render(); logros();
+    DB.salidas[key(d)] = { min: +o.body.querySelector('#smin').value || 0, sens, tipo: s.tipo }; save(); o.close(); render();
     if (sens === 'Molestia') toast('Con molestia: la próxima, más suave. Si sigue, para.');
   };
   const del = o.body.querySelector('#sdel'); if (del) del.onclick = () => { delete DB.salidas[key(d)]; save(); o.close(); render(); };
@@ -354,6 +351,25 @@ function grafEj(id) {
   const pts = [];
   DB.logs.forEach(l => (l.items || []).forEach(it => { if (it.id !== id) return; const h = it.sets.filter(s => s.ok); if (h.length) pts.push({ x: +parse(l.fecha), y: Math.max(...h.map(s => +s.kg || 0)) }); }));
   return pts.length > 1 ? linea(pts, null, 'kg') : '';
+}
+
+// ---------- ESTIRAMIENTOS CON FOTOS ----------
+function listaEstir(ids) {
+  const box = el('<div></div>');
+  ids.forEach(id => {
+    const e = ST[id];
+    const c = el(`<button class="card estir"><div class="pics"><img src="img/${id}_0.jpg" alt="" loading="lazy"><img src="img/${id}_1.jpg" alt="" loading="lazy"></div>
+      <div class="etx"><b>${e.n}</b><span class="eseg">${e.s} s${e.lados ? ' por lado' : ''}</span></div><p class="mut">${e.t}</p></button>`);
+    c.onclick = () => ficha(id); box.append(c);
+  });
+  return box;
+}
+function verEstiramientos() {
+  const o = overlay('Estiramientos', 'Toca uno para verlo en grande');
+  o.body.append(el('<h4>Después del gimnasio (5 min)</h4>'));
+  o.body.append(listaEstir(STRETCH_POST));
+  o.body.append(el('<h4>Más estiramientos (después de bici o monte)</h4>'));
+  o.body.append(listaEstir(Object.keys(ST).filter(id => !STRETCH_POST.includes(id))));
 }
 
 // ---------- VER SESIÓN / CAMBIAR EJERCICIO ----------
@@ -408,6 +424,9 @@ function abrirEntreno() {
     if (descarga(parse(A.fecha))) o.body.append(el('<div class="card note"><b>Semana de descarga</b><p>Una serie menos y mismos pesos. Sales con ganas.</p></div>'));
     o.body.append(el(`<div class="card warm">🔥 <b>Calentamiento:</b> ${CALENTAMIENTO}</div>`));
     A.items.forEach((it, n) => o.body.append(tarjetaEj(it, n, pint)));
+    const vc = el(`<button class="card item"><span class="ic">🧘</span><span class="tx"><b>Vuelta a la calma</b><span>${STRETCH_POST.length} estiramientos con fotos · 5 min</span></span><span class="st">›</span></button>`);
+    vc.onclick = () => { const o2 = overlay('Vuelta a la calma', 'Toca uno para verlo en grande'); o2.body.append(listaEstir(STRETCH_POST)); };
+    o.body.append(vc);
     const fin = el('<button class="btn big wide">Terminar entreno</button>'); fin.onclick = () => terminar(o); o.body.append(fin);
     const dis = el('<button class="btn ghost wide">Descartar entreno</button>');
     dis.onclick = () => { if (confirm('¿Descartar este entreno? No se guarda nada.')) { DB.activo = null; save(); o.close(); } };
@@ -483,8 +502,7 @@ function terminar(o) {
   DB.logs.push(log); DB.activo = null; save();
   clearInterval(descInt); document.querySelectorAll('.rest').forEach(x => x.remove());
   o.close(); verResumen(log, true);
-  if (res.some(r => r.record)) confeti();
-  setTimeout(() => logros(), res.some(r => r.record) ? 1200 : 300);
+  if (res.some(r => r.record)) setTimeout(confeti, 300);
 }
 function verResumen(l, recien) {
   const o = overlay(recien ? '¡Entreno hecho! 💪' : l.ses, `${DN[dayIdx(parse(l.fecha))]} ${fmt(parse(l.fecha))}`, () => render());
@@ -495,7 +513,8 @@ function verResumen(l, recien) {
   ${dif != null ? `<div class="card ${dif >= 0 ? 'gem' : ''}">${dif >= 0 ? '📈' : '📉'} ${dif >= 0 ? '+' : ''}${dif}% de kilos movidos respecto a la última vez que hiciste esta sesión.</div>` : ''}
   ${recs.length ? `<div class="card warn"><b>🏆 ${recs.length} récord${recs.length > 1 ? 's' : ''}</b><ul>${recs.map(r => `<li>${LIB[r.id].n}</li>`).join('')}</ul></div>` : ''}
   <h4>Para la próxima vez</h4>${(l.res || []).map(r => `<div class="card exrow"><img src="${img(r.id)}" alt=""><span class="tx"><b>${LIB[r.id].n}</b><span class="prog">${r.msg || 'Igual'}</span></span></div>`).join('')}
-  ${recien ? `<h4>Vuelta a la calma (5 min)</h4><div class="card">${STRETCH_POST.map(id => `<div class="mut">• ${ST[id].n} — ${ST[id].s} s${ST[id].lados ? ' por lado' : ''}</div>`).join('')}</div>` : ''}`;
+  `;
+  if (recien) { o.body.append(el('<h4>Vuelta a la calma (5 min)</h4>')); o.body.append(listaEstir(STRETCH_POST)); }
   if (!recien) { const b = el('<button class="btn ghost wide">Borrar este entreno</button>'); b.onclick = () => { if (confirm('¿Borrar este entreno del historial?')) { DB.logs = DB.logs.filter(x => x !== l); save(); o.close(); } }; o.body.append(b); }
   else { const b = el('<button class="btn big wide">Listo</button>'); b.onclick = () => o.close(); o.body.append(b); }
 }
@@ -514,7 +533,7 @@ function abrirChequeo() {
   const b = el('<button class="btn big wide">Guardar chequeo</button>');
   b.onclick = () => {
     const pk = parseFloat(String(o.body.querySelector('#cpeso').value).replace(',', '.')) || null;
-    const msgs = aplicarChequeo(resp, pk); setTimeout(() => logros(), 400);
+    const msgs = aplicarChequeo(resp, pk);
     o.body.innerHTML = `<h3>Ajustes de esta semana</h3>${msgs.length ? msgs.map(x => `<div class="card">${x}</div>`).join('') : '<div class="card">Todo en orden: el plan sigue igual.</div>'}`;
     const ok = el('<button class="btn big wide">Vale</button>'); ok.onclick = () => o.close(); o.body.append(ok);
   };
@@ -535,6 +554,7 @@ function vPlan(m) {
   m.append(el('<h3>Tus sesiones</h3>'));
   DB.plan.sesiones.forEach(s => { const c = el(`<button class="card item gym"><span class="ic">🏋️</span><span class="tx"><b>${s.n}</b><span>${s.items.map((x, i) => LIB[ejDe(s, i)].n).join(' · ')}</span></span><span class="st">›</span></button>`); c.onclick = () => verSesion(s); m.append(c); });
   const lb = el('<button class="btn ghost wide">📚 Biblioteca de ejercicios</button>'); lb.onclick = biblioteca; m.append(lb);
+  const es = el('<button class="btn ghost wide">🧘 Estiramientos con fotos</button>'); es.onclick = verEstiramientos; m.append(es);
 }
 function biblioteca() {
   const o = overlay('Biblioteca', `${Object.keys(LIB).length} ejercicios y ${Object.keys(ST).length} estiramientos`);
@@ -567,7 +587,7 @@ function vComida(m) {
   const g = el(`<div class="card">${ps.length > 1 ? linea(ps.map(p => ({ x: +parse(p.f), y: p.kg })), P.objetivo === 'bajar' ? P.pesoObj : null, 'kg') : '<p class="mut">Cuando tengas dos pesadas verás aquí la gráfica.</p>'}
     <div class="row"><input id="npeso" type="number" inputmode="decimal" step="0.1" placeholder="Peso de hoy"><button class="btn sm">Apuntar</button></div>
     <p class="mut">Ahora ${num(pesoActual())} kg${P.objetivo === 'bajar' ? ` · objetivo ${num(P.pesoObj)} kg` : ''}</p></div>`);
-  g.querySelector('button').onclick = () => { const v = parseFloat(String(g.querySelector('input').value).replace(',', '.')); if (!v) return toast('Pon el peso'); DB.pesos = DB.pesos.filter(p => p.f !== key(today())); DB.pesos.push({ f: key(today()), kg: v }); save(); render(); logros(); };
+  g.querySelector('button').onclick = () => { const v = parseFloat(String(g.querySelector('input').value).replace(',', '.')); if (!v) return toast('Pon el peso'); DB.pesos = DB.pesos.filter(p => p.f !== key(today())); DB.pesos.push({ f: key(today()), kg: v }); save(); render(); };
   m.append(g);
   m.append(el('<h3>Recetas</h3>'));
   const tipos = ['Todas', ...new Set(RECETAS.map(r => r.tipo))];
@@ -583,7 +603,6 @@ function vComida(m) {
 // ---------- PROGRESO ----------
 function vProgreso(m) {
   m.append(el('<h2>Progreso</h2>'));
-  m.append(el(cabeceraNivel(stats()))); m.append(filaMedallas());
   const gym = DB.logs.filter(l => !l.cardio);
   const lm = monday(today());
   const estaVol = gym.filter(l => wkey(parse(l.fecha)) === key(lm)).reduce((a, l) => a + l.vol, 0);
@@ -633,7 +652,7 @@ function vAjustes(m) {
   const b2 = el('<button class="btn ghost wide">⬇️ Guardar copia de seguridad</button>'); b2.onclick = exportar; m.append(b2);
   const b3 = el('<button class="btn ghost wide">⬆️ Cargar copia de seguridad</button>'); b3.onclick = importar; m.append(b3);
   const b4 = el('<button class="btn ghost wide danger">Borrar todo y empezar de cero</button>'); b4.onclick = () => { if (confirm('Se borra TODO: plan, entrenos, pesos. No hay vuelta atrás. ¿Seguro?')) { localStorage.removeItem(KEY); location.reload(); } }; m.append(b4);
-  m.append(el('<p class="mut" style="text-align:center;margin-top:20px">Coach Iñaki · v2</p>'));
+  m.append(el('<p class="mut" style="text-align:center;margin-top:20px">Coach Iñaki · v3</p>'));
 }
 function exportar() {
   const b = new Blob([JSON.stringify(DB)], { type: 'application/json' });
@@ -692,7 +711,7 @@ function onboarding(rehacer) {
   const acabar = () => {
     o.body.innerHTML = `<div class="calc"><div class="spin"></div><h3>Calculando tu plan…</h3><p class="mut">Eligiendo ejercicios, series y pesos para ti.</p></div>`;
     setTimeout(() => {
-      DB.perfil = A; DB.plan = generarPlan(A); DB.swaps = {}; if (!DB.medallas) { DB.medallas = {}; DB.nivelVisto = 1; }
+      DB.perfil = A; DB.plan = generarPlan(A); DB.swaps = {}
       if (!DB.pesos.length || rehacer) { DB.pesos = DB.pesos.filter(p => p.f !== key(today())); DB.pesos.push({ f: key(today()), kg: A.peso }); }
       save();
       const N = nutri();
@@ -709,7 +728,6 @@ function onboarding(rehacer) {
 
 // ---------- arranque ----------
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => { tab = b.dataset.t; planWk = 0; render(); });
-logros(true);
 render();
 if (DB.activo && DB.perfil) abrirEntreno();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(r => navigator.serviceWorker.ready).then(r => r.active && r.active.postMessage('fotos')).catch(() => { });
