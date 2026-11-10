@@ -154,14 +154,13 @@ function nutri() {
 }
 
 // ---------- navegación ----------
-const TABS = [['hoy', '🏠', 'Hoy'], ['rut', '🏋️', 'Rutinas'], ['pro', '📈', 'Progreso']];
-let tab = 'hoy', rutSel = null, comSel = 'rec';
+let tab = 'hoy', rutSel = null;
 function render() {
   const m = $('#main'); m.innerHTML = '';
-  ({ hoy: vHoy, rut: vRutinas, cam: vCamino, com: vComer, pro: vProgreso })[tab](m);
-  const n = $('#nav'); n.innerHTML = '';
-  TABS.forEach(([k, e, t]) => { const b = el(`<button class="${tab === k || (k === 'pro' && (tab === 'cam' || tab === 'com')) ? 'on' : ''}"><span>${e}</span>${t}</button>`); b.onclick = () => { tab = k; render(); scrollTo(0, 0); }; n.append(b); });
+  ({ hoy: vHoy, rut: vRutinas, cam: vCamino, pro: vProgreso })[tab](m);
 }
+function ir(t) { tab = t; render(); scrollTo(0, 0); }
+function atras() { const b = el('<button class="sm ghost" style="margin-bottom:10px;position:sticky;top:calc(8px + env(safe-area-inset-top));z-index:4;background:var(--bg)">‹ Hoy</button>'); b.onclick = () => ir('hoy'); return b; }
 function overlay(titulo, sub, onclose) {
   const o = el(`<div class="ov"><div class="hd"><button class="back">‹</button><div class="grow"><b>${titulo}</b><span>${sub || ''}</span></div></div><div class="bd"></div></div>`);
   const cerrar = () => { o.remove(); onclose && onclose(); };
@@ -194,8 +193,18 @@ function vHoy(m) {
     r.onclick = () => verDia(d); lista.append(r);
   }
   m.append(lista);
-  const c = el(`<button class="card btn"><div class="row"><div class="ic">🏁</div><div class="grow"><b>${falta > 0 ? falta + ' días para Monegros' : 'Monegros'}</b><div class="small mut">Ver el camino</div></div><span class="mut">›</span></div></button>`);
-  c.onclick = () => { tab = 'cam'; render(); scrollTo(0, 0); }; m.append(c);
+  if (chequeoPendiente()) { const q = el(`<button class="card btn warn"><div class="row"><div class="ic">📝</div><div class="grow"><b>Revisión de la semana</b><div class="small mut">1 minuto: cómo vas y tu peso</div></div><span class="sm">Hacer</span></div></button>`); q.onclick = abrirChequeo; m.append(q); }
+  m.append(el(`<div class="card"><div class="row"><div class="ic">🍽️</div><div class="grow small">${consejoComida(t)}</div></div></div>`));
+  const acc = el(`<div class="tres"><button><span>🏋️</span>Rutinas</button><button><span>🗺️</span>Camino<small>${falta > 0 ? falta + ' días' : ''}</small></button><button><span>📈</span>Progreso</button></div>`);
+  ['rut', 'cam', 'pro'].forEach((k, i) => $$('button', acc)[i].onclick = () => ir(k)); m.append(acc);
+}
+function consejoComida(d) {
+  const n = nutri(), hoy = salidaDe(d), man = salidaDe(addD(d, 1)); let t;
+  if (hoy && hoy.h >= 2) t = 'Salida larga: desayuna bien y come algo cada hora (plátano, dátiles o bocadillo). Bebe cada 15 minutos.';
+  else if (man && man.h >= 3) t = 'Mañana toca tirada larga: cena con hidratos (pasta o arroz) y deja la comida de la salida preparada.';
+  else if (sesionDe(d)) t = 'Gimnasio en ayunas: después, desayuno con proteína (yogur griego, huevos o pavo) y algo de pan o fruta.';
+  else t = 'Día tranquilo: proteína en cada comida, verdura en comida y cena, y sin picar entre horas.';
+  return `<b>${t}</b><div class="mut" style="margin-top:4px">Objetivo del día: unas ${n.kcal} kcal y ${n.p} g de proteína.</div>`;
 }
 const textoItem = it => it.k === 'gym' ? `🏋️ ${SESIONES[it.ses].n}` : it.k === 'out' ? `${TIPO[it.tipo][0]} ${TIPO[it.tipo][1]} ${horas(it.h)}` : '🏁 Descanso';
 function tarjeta(d, it, futuro) {
@@ -209,7 +218,7 @@ function tarjeta(d, it, futuro) {
       <div class="small mut">Calentamiento 8' · ${S.items.length} ejercicios · cinta 12' · 12 estiramientos</div>
       ${futuro ? '' : `<button class="big" style="margin-top:12px">${ok ? 'Ver lo que hice' : dr ? 'CONTINUAR' : 'EMPEZAR'}</button>`}</div>`);
     const b = $('button.big', c); if (b) b.onclick = () => ok ? verResumenDia(key(d)) : abrirEntreno(it.ses, d);
-    if (futuro) { c.style.cursor = 'pointer'; c.append(el('<div class="small" style="color:var(--accent);margin-top:8px">Ver la rutina ›</div>')); c.onclick = () => { rutSel = it.ses; tab = 'rut'; render(); scrollTo(0, 0); }; }
+    if (futuro) { c.style.cursor = 'pointer'; c.append(el('<div class="small" style="color:var(--accent);margin-top:8px">Ver la rutina ›</div>')); c.onclick = () => { rutSel = it.ses; ir('rut'); }; }
     return c;
   }
   const s = DB.salidas[key(d)];
@@ -229,7 +238,7 @@ function verDia(d) {
     $$('button', c).forEach(b => b.addEventListener('click', () => o.remove()));
     if (it.k === 'gym') {
       const v = el('<button class="big ghost" style="margin-top:8px">Ver la rutina</button>');
-      v.onclick = () => { o.remove(); rutSel = it.ses; tab = 'rut'; render(); scrollTo(0, 0); }; c.append(v);
+      v.onclick = () => { o.remove(); rutSel = it.ses; ir('rut'); }; c.append(v);
     }
     $('#its', o).append(c);
   });
@@ -238,7 +247,7 @@ function verDia(d) {
 // ---------- RUTINAS (estilo lámina) ----------
 function vRutinas(m) {
   if (!rutSel) rutSel = sesionDe(today()) || 'L';
-  m.append(el('<div class="top"><h1>Rutinas</h1><span class="mut small">L · X · V a las 6:00</span></div>'));
+  m.append(atras()); m.append(el('<div class="top"><h1>Rutinas</h1><span class="mut small">L · X · V a las 6:00</span></div>'));
   const ch = el('<div class="chips"></div>');
   Object.entries(SESIONES).forEach(([k, S]) => { const b = el(`<button class="chip ${rutSel === k ? 'on' : ''}">${S.dia}</button>`); b.onclick = () => { rutSel = k; render(); }; ch.append(b); });
   m.append(ch);
@@ -518,8 +527,8 @@ function abrirChequeo() {
     }
     if (!msgs.length) msgs.push('Todo en orden: sigue el plan tal cual.');
     DB.chequeo[wkey(today())] = { r, suave: lig, msgs }; save(); o.remove();
-    const h = hoja(`<h2 style="font-size:28px">Esta semana</h2>${msgs.map(x => `<div class="card note">${x}</div>`).join('')}<button class="big" id="okk">Entendido</button>`);
-    $('#okk', h).onclick = () => h.remove();
+    const h = hoja(`<h2 style="font-size:28px">Esta semana</h2>${msgs.map(x => `<div class="card note">${x}</div>`).join('')}<div class="small mut" style="margin:8px 0">Si quieres que Claude revise la semana y ajuste el plan, copia tus datos y pégaselos en el chat.</div><button class="big ghost" id="cp" style="margin-bottom:8px">📤 Copiar mis datos para Claude</button><button class="big" id="okk">Entendido</button>`);
+    $('#okk', h).onclick = () => h.remove(); $('#cp', h).onclick = exportar;
     render();
   };
 }
@@ -573,46 +582,6 @@ function verSemana(w) {
   hoja(h);
 }
 
-// ---------- COMER ----------
-function vComer(m) {
-  m.append(atras()); m.append(el('<div class="top"><h1>Comer</h1></div>'));
-  const sg = el(`<div class="seg"><button class="${comSel === 'rec' ? 'on' : ''}">🍳 Recetas</button><button class="${comSel === 'com' ? 'on' : ''}">🛒 Lista de la compra</button></div>`);
-  $$('button', sg).forEach((b, i) => b.onclick = () => { comSel = i ? 'com' : 'rec'; render(); }); m.append(sg);
-  if (comSel === 'rec') {
-    const n = nutri(), sal = salidaDe(today());
-    m.append(el(`<div class="card"><div class="sec" style="margin-top:0">Objetivo de hoy</div><div class="macro"><div><b>${n.kcal}</b><span>kcal</span></div><div><b>${n.p}</b><span>prot g</span></div><div><b>${n.c}</b><span>hidr g</span></div><div><b>${n.g}</b><span>grasa g</span></div></div>
-      <div class="small mut" style="margin-top:10px">${sesionDe(today()) ? 'Día de gimnasio en ayunas: el desayuno de después, con proteína (yogur griego, huevos o pavo).' : 'Reparte la proteína entre las comidas.'}${sal && sal.h >= 2 ? ' Salida larga: suma hidratos y come algo cada hora (plátano, dátiles, bocadillo).' : ''}</div></div>`));
-    const EM = { Desayuno: '🍳', Comida: '🍽️', Cena: '🌙', Recena: '🥛', Salida: '🚵' };
-    [...new Set(RECETAS.map(r => r.tipo))].forEach(tipo => {
-      m.append(el(`<div class="sec">${tipo}</div>`));
-      RECETAS.filter(r => r.tipo === tipo).forEach(r => {
-        const hecha = !!DB.recetas[r.n];
-        const c = el(`<div class="rcard"><button class="rtop"><span class="remoji">${EM[tipo] || '🍴'}</span><div class="grow"><div class="rname">${r.n}</div><div class="rmeta"><span class="tag">${r.kcal} kcal</span><span class="tag">${r.p} g prot</span>${hecha ? '<span class="tag" style="color:var(--accent);border-color:var(--accent)">✓ hecha</span>' : ''}</div></div><span class="rchev">▾</span></button>
-          <div class="rbody"><div><div class="sec" style="margin:0 0 4px">Ingredientes</div><div class="small">${r.ing}</div></div><div><div class="sec" style="margin:0 0 4px">Cómo</div><div class="small">${r.t}</div></div>
-          <div class="small mut">Hidratos ${r.c} g · grasa ${r.g} g</div><button class="rbtn ${hecha ? 'on' : ''}">${hecha ? '✓ Hecha' : 'Marcar como hecha'}</button></div></div>`);
-        $('.rtop', c).onclick = () => c.classList.toggle('open');
-        $('.rbtn', c).onclick = () => {
-          if (DB.recetas[r.n]) delete DB.recetas[r.n]; else DB.recetas[r.n] = key(today()); save();
-          const on = !!DB.recetas[r.n]; const b = $('.rbtn', c); b.classList.toggle('on', on); b.textContent = on ? '✓ Hecha' : 'Marcar como hecha';
-          const meta = $('.rmeta', c); const tg = $('.tag[style]', meta); if (on && !tg) meta.append(el('<span class="tag" style="color:var(--accent);border-color:var(--accent)">✓ hecha</span>')); if (!on && tg) tg.remove();
-        };
-        m.append(c);
-      });
-    });
-  } else {
-    COMPRA.forEach(cat => {
-      const hechos = cat.items.filter(([n]) => DB.compra[n]).length;
-      const c = el(`<div class="ccat cc-${cat.k}"><div class="chdr"><span>${cat.e} ${cat.n}</span><span>${hechos}/${cat.items.length}</span></div></div>`);
-      cat.items.forEach(([n, q]) => {
-        const b = el(`<button class="citem ${DB.compra[n] ? 'on' : ''}"><span class="chk ${DB.compra[n] ? 'on' : ''}">${DB.compra[n] ? '✓' : ''}</span><div class="grow tx">${n}</div><span class="small mut">${q}</span></button>`);
-        b.onclick = () => { DB.compra[n] = !DB.compra[n]; save(); render(); }; c.append(b);
-      });
-      m.append(c);
-    });
-    const r = el('<button class="big ghost">Vaciar la lista (nueva compra)</button>'); r.onclick = () => { DB.compra = {}; save(); render(); }; m.append(r);
-  }
-}
-
 // ---------- PROGRESO ----------
 let proSel = null;
 function grafica(pts, obj, u) {
@@ -626,12 +595,8 @@ function grafica(pts, obj, u) {
     <text x="4" y="${Y(hi) + 4}" fill="#8A9C7C" font-size="11">${num(hi)}</text><text x="4" y="${Y(lo) + 4}" fill="#8A9C7C" font-size="11">${num(lo)}</text>
     <text x="${P}" y="${H - 4}" fill="#8A9C7C" font-size="11">${pts[0].x}</text><text x="${W - 10}" y="${H - 4}" text-anchor="end" fill="#8A9C7C" font-size="11">${pts[pts.length - 1].x}${u ? ' · ' + u : ''}</text></svg>`;
 }
-function atras() { const b = el('<button class="sm ghost" style="margin-bottom:10px">‹ Progreso</button>'); b.onclick = () => { tab = 'pro'; render(); scrollTo(0, 0); }; return b; }
 function vProgreso(m) {
-  m.append(el('<div class="top"><h1>Progreso</h1></div>'));
-  const acc = el(`<div class="two" style="margin-bottom:6px"><button class="card btn" style="text-align:center"><div style="font-size:30px">🗺️</div><b>Camino a Monegros</b></button><button class="card btn" style="text-align:center"><div style="font-size:30px">🍽️</div><b>Comer y compra</b></button></div>`);
-  $$('button', acc)[0].onclick = () => { tab = 'cam'; render(); scrollTo(0, 0); }; $$('button', acc)[1].onclick = () => { tab = 'com'; render(); scrollTo(0, 0); };
-  m.append(acc);
+  m.append(atras()); m.append(el('<div class="top"><h1>Progreso</h1></div>'));
   if (chequeoPendiente()) { const c = el(`<button class="card btn warn"><div class="row"><div class="ic">📝</div><div class="grow"><b>Chequeo de la semana</b><div class="small mut">1 minuto: cómo vas, lumbar, gemelo y peso</div></div><span class="sm">Hacer</span></div></button>`); c.onclick = abrirChequeo; m.append(c); }
   const ps = DB.pesos.slice().sort((a, b) => a.f < b.f ? -1 : 1);
   m.append(el('<div class="sec">Peso corporal</div>'));
@@ -653,8 +618,8 @@ function vProgreso(m) {
   const tot = Object.values(DB.hecho).filter(h => h.gym).length, sal = Object.values(DB.salidas);
   m.append(el(`<div class="stats"><div><b>${tot}</b><span>sesiones gym</span></div><div><b>${sal.length}</b><span>salidas</span></div><div><b>${num(sal.reduce((a, s) => a + (+s.km || 0), 0), 0)}</b><span>km</span></div><div><b>${num(sal.reduce((a, s) => a + (+s.des || 0), 0), 0)}</b><span>m desnivel</span></div></div>`));
   DB.logs.slice().sort((a, b) => a.f < b.f ? 1 : -1).slice(0, 5).forEach(l => { const c = el(`<button class="card btn"><div class="row"><div class="grow"><b>${SESIONES[l.ses] ? SESIONES[l.ses].n : l.ses}</b><div class="small mut">${fmt(parse(l.f))} · ${l.min} min · ${num(l.vol / 1000)} t</div></div><span class="mut">›</span></div></button>`); c.onclick = () => verResumenDia(l.f); m.append(c); });
-  m.append(el('<div class="sec">Chequeo y copia de seguridad</div>'));
-  const b1 = el('<button class="big ghost" style="margin-bottom:8px">📝 Hacer el chequeo de la semana</button>'); b1.onclick = abrirChequeo; m.append(b1);
+  m.append(el('<div class="sec">Revisión y copia de seguridad</div>'));
+  const b1 = el('<button class="big ghost" style="margin-bottom:8px">📝 Hacer la revisión de la semana</button>'); b1.onclick = abrirChequeo; m.append(b1);
   const b2 = el('<button class="big ghost" style="margin-bottom:8px">📤 Copiar mis datos (para pasárselos a Claude)</button>'); b2.onclick = exportar; m.append(b2);
   const b3 = el('<button class="big ghost">📥 Cargar una copia</button>'); b3.onclick = importar; m.append(b3);
 }

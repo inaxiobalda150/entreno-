@@ -120,21 +120,3 @@ const FASES = [
   { n: 'Después', de: 28, a: 99, c: '#A78BFA', t: 'Mantener la fuerza y elegir el siguiente objetivo.' },
 ];
 const TIPO = { btt: ['🚵', 'BTT'], trail: ['🏃', 'Trail'], walk: ['🥾', 'Caminata'], race: ['🏁', 'Monegros'] };
-
-// Lista de la compra (categorías y colores de la app de la HU108)
-const COMPRA = [
-  { k: 'prot', n: 'Proteínas', e: '🥩', items: [
-    ['Pechuga de pollo', '600 g'], ['Pavo en lonchas', '300 g'], ['Huevos', '1 docena'], ['Atún al natural', '4 latas'],
-    ['Yogur griego natural', '6 unidades'], ['Jamón', '150 g'], ['Queso en lonchas', '1 paquete'],
-    ['Merluza', '400 g'], ['Salmón', '300 g'], ['Bacalao desalado', '360 g'] ] },
-  { k: 'veg', n: 'Verduras y fruta', e: '🥬', items: [
-    ['Lechuga y ensalada', '2 bolsas'], ['Tomate', '1 kg'], ['Calabacín', '3 unidades'], ['Pimiento', '3 unidades'],
-    ['Cebolla', '1 malla'], ['Puerro', '3 unidades'], ['Zanahoria', '500 g'], ['Espinacas', '1 bolsa'],
-    ['Ajo', '1 cabeza'], ['Plátanos', '1 racimo'], ['Fruta de temporada', '6 piezas'] ] },
-  { k: 'carb', n: 'Carbohidratos', e: '🍚', items: [
-    ['Pan', '1 barra grande'], ['Arroz', '500 g'], ['Pasta', '500 g'], ['Lentejas', '500 g'],
-    ['Garbanzos cocidos', '1 bote'], ['Patatas', '1 kg'], ['Corn flakes', '1 caja'], ['Dátiles', '1 bolsa'] ] },
-  { k: 'extra', n: 'Otros', e: '🧂', items: [
-    ['Leche', '2 l'], ['Aceite de oliva', '1 botella'], ['Nueces', '1 bolsa'], ['Chorizo', '1 trozo'],
-    ['Salsa vizcaína', '1 bote'], ['Tomate triturado', '1 bote'], ['Pimentón y comino', 'revisar'], ['Quesitos', '1 caja'] ] },
-];
