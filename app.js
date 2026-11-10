@@ -181,12 +181,14 @@ function vHoy(m) {
   const st = statsSemana(monday(t));
   m.append(el(`<div class="hero"><div class="row"><div class="grow"><div class="cnt">${falta > 0 ? falta : '🏁'}</div><div class="lbl">${falta > 0 ? 'días para Monegros' : 'Monegros'}</div></div>
     <div style="text-align:right"><div class="bebas" style="font-size:40px;line-height:1">${st.h}<span class="mut" style="font-size:24px">/${st.p}</span></div><div class="lbl">hechos esta semana</div></div></div>
-    <div class="bar"><i style="width:${Math.min(100, Math.max(0, (w - 1 + st.frac) / 25 * 100))}%"></i></div><div class="small mut" style="margin-top:6px">${f.t}</div></div>`));
+    <div class="bar"><i style="width:${Math.min(100, Math.max(0, (w - 1 + st.frac) / 25 * 100))}%"></i></div><div class="small mut" style="margin-top:6px">${f.t}</div><div class="small" style="color:var(--accent);margin-top:6px">Ver el camino ›</div></div>`));
+  m.lastChild.style.cursor = 'pointer'; m.lastChild.onclick = () => { tab = 'cam'; render(); };
   const wk = el('<div class="week"></div>');
   for (let i = 0; i < 7; i++) {
     const d = addD(monday(t), i), its = itemsDia(d).filter(x => x.k !== 'rest');
     const ic = its.map(x => hechoItem(d, x) ? '✅' : x.k === 'gym' ? '🏋️' : TIPO[x.tipo][0]).join('');
-    wk.append(el(`<div class="${key(d) === key(t) ? 'hoy' : ''} ${its.length && its.every(x => hechoItem(d, x)) ? 'fin' : ''}">${DC[i]}<b>${d.getDate()}</b><i>${ic || '·'}</i></div>`));
+    const dv = el(`<div class="${key(d) === key(t) ? 'hoy' : ''} ${its.length && its.every(x => hechoItem(d, x)) ? 'fin' : ''}">${DC[i]}<b>${d.getDate()}</b><i>${ic || '·'}</i></div>`);
+    dv.onclick = () => verDia(d); wk.append(dv);
   }
   m.append(wk);
   if (chequeoPendiente()) { const c = el(`<button class="card btn warn"><div class="row"><div class="ic">📝</div><div class="grow"><b>Chequeo de la semana</b><div class="small mut">1 minuto: cómo vas, lumbar, gemelo y peso</div></div><span class="sm">Hacer</span></div></button>`); c.onclick = abrirChequeo; m.append(c); }
@@ -209,6 +211,7 @@ function tarjeta(d, it, futuro) {
       <div class="small mut">Calentamiento 8' · ${S.items.length} ejercicios · cinta 12' · 12 estiramientos</div>
       ${futuro ? '' : `<button class="big" style="margin-top:12px">${ok ? 'Ver lo que hice' : dr ? 'CONTINUAR' : 'EMPEZAR'}</button>`}</div>`);
     const b = $('button.big', c); if (b) b.onclick = () => ok ? verResumenDia(key(d)) : abrirEntreno(it.ses, d);
+    if (futuro) { c.style.cursor = 'pointer'; c.append(el('<div class="small" style="color:var(--accent);margin-top:8px">Ver la rutina ›</div>')); c.onclick = () => { rutSel = it.ses; tab = 'rut'; render(); scrollTo(0, 0); }; }
     return c;
   }
   const s = DB.salidas[key(d)];
@@ -216,7 +219,22 @@ function tarjeta(d, it, futuro) {
     ${s ? `<div class="small" style="color:var(--accent);margin-top:4px">Hecho: ${s.km ? num(+s.km) + ' km · ' : ''}${s.h ? horas(+s.h) : ''}${s.des ? ' · ' + s.des + ' m' : ''}</div>` : ''}</div></div>
     ${futuro ? '' : `<button class="sm ${ok ? 'ghost' : ''}" style="margin-top:10px">${ok ? 'Editar' : 'Apuntar salida'}</button>`}</div>`);
   const b = $('button', c); if (b) b.onclick = () => apuntarSalida(d, it);
+  if (futuro) { c.style.cursor = 'pointer'; c.onclick = () => verDia(d); }
   return c;
+}
+function verDia(d) {
+  const its = itemsDia(d), o = hoja(`<div class="small mut">${DN[dayIdx(d)]} · semana ${semana(d)}</div><h2 style="font-size:32px;margin-bottom:10px">${fmt(d)}</h2><div id="its"></div>`);
+  if (!its.length) $('#its', o).append(el('<div class="card"><div class="row"><div class="ic">😌</div><b>Día de descanso</b></div></div>'));
+  its.forEach(it => {
+    if (it.k === 'rest') { $('#its', o).append(el(`<div class="card note"><b>🏁 ${it.t}</b></div>`)); return; }
+    const c = tarjeta(d, it, false);
+    $$('button', c).forEach(b => b.addEventListener('click', () => o.remove()));
+    if (it.k === 'gym') {
+      const v = el('<button class="big ghost" style="margin-top:8px">Ver la rutina</button>');
+      v.onclick = () => { o.remove(); rutSel = it.ses; tab = 'rut'; render(); scrollTo(0, 0); }; c.append(v);
+    }
+    $('#its', o).append(c);
+  });
 }
 
 // ---------- RUTINAS (estilo lámina) ----------
