@@ -1026,7 +1026,6 @@ const FINDE = [null,[["btt",1.5,"Rodaje suave por terreno cómodo. Solo volver a
 
 // ---------- SESIONES TIPO (huecos por patrón; el generador elige el ejercicio) ----------
 
-const CALENTAMIENTO = '8 min de bici estática suave + 5 gato-camello + 3 "mejor estiramiento del mundo" por lado.';
 
 // ---------- RECETAS (valores aproximados por ración) ----------
 const RECETAS = [

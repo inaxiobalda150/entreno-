@@ -1,20 +1,31 @@
-// ===== COACH IÑAKI · lógica de la app =====
+// ===== CAMINO A MONEGROS · lógica de la app =====
 'use strict';
-const KEY = 'coach_inaki_v1';
-const DAY = 864e5;
+const KEY = 'monegros_gym_v1', OLD = 'coach_inaki_v1', LAMK = 'monegros_laminas', DAY = 864e5;
 const DN = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const DC = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 const MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
-let DB = { v: 1, perfil: null, plan: null, swaps: {}, prog: {}, logs: [], volAdj: {}, recup: {}, pesos: [], nut: { ajuste: 0 }, salidas: {}, activo: null };
-try { const raw = localStorage.getItem(KEY); if (raw) DB = Object.assign(DB, JSON.parse(raw)); } catch (e) { }
-try { localStorage.removeItem('entreno_inaki_v1'); } catch (e) { } // datos de la app vieja fuera
+let DB = { v: 1, prog: {}, logs: [], pesos: [], salidas: {}, hecho: {}, recetas: {}, compra: {}, chequeo: {}, ajuste: 0, draft: null };
+(function cargar() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) { DB = Object.assign(DB, JSON.parse(raw)); return; }
+    const old = localStorage.getItem(OLD); // de la versión anterior: peso corporal, kilos de cada ejercicio y salidas
+    if (old) {
+      const o = JSON.parse(old);
+      DB.pesos = Array.isArray(o.pesos) ? o.pesos : [];
+      DB.salidas = o.salidas && typeof o.salidas === 'object' ? o.salidas : {};
+      Object.entries(o.prog || {}).forEach(([id, p]) => { if (p && p.kg != null) DB.prog[id] = { kg: +p.kg || 0, reps: +p.reps || 0 }; });
+    }
+  } catch (e) { }
+})();
 function save() { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) { toast('No se ha podido guardar'); } }
 
 // ---------- utilidades ----------
-const $ = s => document.querySelector(s);
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 function el(h) { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstElementChild; }
-function toast(t) { const x = el(`<div class="toast">${t}</div>`); document.body.append(x); setTimeout(() => x.remove(), 2600); }
+function toast(t) { const x = el(`<div class="toast">${t}</div>`); document.body.append(x); setTimeout(() => x.remove(), 2800); }
 const pad = n => String(n).padStart(2, '0');
 const key = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
@@ -23,711 +34,614 @@ const addD = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); retu
 const dayIdx = d => (d.getDay() + 6) % 7;
 const monday = d => addD(d, -dayIdx(d));
 const wkey = d => key(monday(d));
+const dias = (a, b) => Math.round((b - a) / DAY);
 const fmt = d => `${d.getDate()} ${MES[d.getMonth()]}`;
-const r10 = x => Math.round(x / 10) * 10;
 const num = (x, dec = 1) => (Math.round(x * 10 ** dec) / 10 ** dec).toLocaleString('es-ES');
-const img = id => `img/${id}_0.jpg`;
-function roundInc(kg, inc) { return inc ? Math.max(inc, Math.round(kg / inc) * inc) : 0; }
-
-// ---------- calendario de bici / Monegros ----------
-function semanaBici(d) {
-  const P = DB.perfil; if (!P || !P.monegros) return null;
-  const wr = monday(parse(P.monegros));
-  const hasta = Math.round((wr - monday(d)) / DAY / 7);
-  return FINDE.length - 1 - hasta; // 25 = semana de la prueba
+const im = (id, n = 0) => `img/${id}_${n}.jpg`;
+const horas = h => { const H = Math.floor(h), M = Math.round((h - H) * 60); return !H ? `${M} min` : M ? `${H} h ${M} min` : `${H} h`; };
+const roundInc = (kg, inc) => inc ? Math.max(inc, Math.round(kg / inc) * inc) : 0;
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+function pitido() {
+  try { navigator.vibrate && navigator.vibrate([250, 120, 250]); } catch (e) { }
+  try { const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(), g = a.createGain(); o.frequency.value = 880; o.connect(g); g.connect(a.destination); g.gain.value = .15; o.start(); setTimeout(() => { o.stop(); a.close(); }, 350); } catch (e) { }
 }
-function fase(d) { const w = semanaBici(d); if (w == null) return null; return FASES.find(f => w >= f.de && w <= f.a) || null; }
-function descarga(d) {
-  const P = DB.perfil;
-  if (P && P.finde) { const w = semanaBici(d); const f = FINDE[w]; return !!(f && /DESCANSO/.test(f[0][2])); }
-  if (!DB.plan) return false;
-  const n = Math.round((monday(d) - monday(parse(DB.plan.creado))) / DAY / 7) + 1;
-  return n > 0 && n % 5 === 0;
+let wake = null;
+async function despierto(on) { try { if (on && 'wakeLock' in navigator) wake = await navigator.wakeLock.request('screen'); else if (!on && wake) { wake.release(); wake = null; } } catch (e) { } }
+
+// ---------- láminas propias (solo en este móvil, nunca se suben) ----------
+function laminas() { try { return JSON.parse(localStorage.getItem(LAMK)) || {}; } catch (e) { return {}; } }
+function guardarLamina(k, file) {
+  if (!file) return;
+  const img = new Image(), url = URL.createObjectURL(file);
+  img.onload = () => {
+    const sc = Math.min(1, 1400 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+    c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+    const L = laminas(); L[k] = c.toDataURL('image/jpeg', 0.8);
+    try { localStorage.setItem(LAMK, JSON.stringify(L)); toast('Lámina guardada en tu móvil'); } catch (e) { toast('No cabe más: quita alguna lámina'); }
+    render();
+  };
+  img.onerror = () => toast('No he podido leer esa imagen');
+  img.src = url;
+}
+function bloqueLamina(k, texto) {
+  const L = laminas()[k];
+  const c = el(`<div class="card">${L ? `<img src="${L}" alt="" style="width:100%;border-radius:10px;display:block"><div class="row" style="gap:8px;margin-top:8px"><button class="sm ghost" data-a="ver">Ver grande</button><label class="sm ghost">Cambiar<input type="file" accept="image/*" hidden></label><button class="sm ghost" data-a="del">Quitar</button></div>`
+    : `<label class="row" style="cursor:pointer"><div class="ic">📷</div><div class="grow"><b>Añadir mi lámina</b><div class="small mut">${texto}. Se guarda solo en tu móvil, no se sube a internet.</div></div><input type="file" accept="image/*" hidden></label>`}</div>`);
+  $('input', c).onchange = e => guardarLamina(k, e.target.files[0]);
+  const v = $('[data-a=ver]', c); if (v) v.onclick = () => { const o = el(`<div class="ov" style="background:#000;overflow:auto"><img src="${L}" style="width:100%"></div>`); o.onclick = () => o.remove(); document.body.append(o); };
+  const d = $('[data-a=del]', c); if (d) d.onclick = () => { const X = laminas(); delete X[k]; localStorage.setItem(LAMK, JSON.stringify(X)); render(); };
+  return c;
+}
+
+// ---------- calendario ----------
+const START = parse(INICIO), RACE = parse(MONEGROS);
+const semana = d => Math.floor(dias(START, monday(d)) / 7) + 1;
+const fase = w => FASES.find(f => w >= f.de && w <= f.a) || FASES[0];
+const descarga = w => w >= 1 && w <= 20 && w % 4 === 0;
+function suave(d) { const w = semana(d); return descarga(w) || (w >= 22 && w <= 27) || !!(DB.chequeo[wkey(d)] && DB.chequeo[wkey(d)].suave); }
+function sesionDe(d) {
+  const w = semana(d), di = dayIdx(d);
+  if (w < 1) return null;
+  if (w === 25 && di === 4) return null; // víspera de Monegros
+  return { 0: 'L', 2: 'X', 4: 'V' }[di] || null;
 }
 function salidaDe(d) {
-  const P = DB.perfil; if (!P || !P.finde) return null;
   const di = dayIdx(d); if (di < 5) return null;
-  const w = semanaBici(d);
-  if (w >= 1 && w < FINDE.length) { const s = FINDE[w][di - 5]; return { tipo: s[0], h: s[1], t: s[2], w }; }
-  if (w < 1) return di === 5 ? { tipo: 'btt', h: 1.5, t: 'Antes del plan: rodaje suave por terreno cómodo.', w } : { tipo: 'walk', h: 0.75, t: 'Caminata por monte a ritmo cómodo.', w };
-  return di === 5 ? { tipo: 'trail', h: 1, t: 'Después de Monegros: trail suave. El plan del ultra lo montamos cuando lo elijas.', w } : null;
+  const w = semana(d);
+  if (w < 1) return null;
+  if (w < FINDE.length) { const s = FINDE[w][di - 5]; return { tipo: s[0], h: s[1], t: s[2] }; }
+  if (w <= 27) return di === 5 ? { tipo: 'btt', h: 1.5, t: 'Recuperación: paseo suave en bici.' } : { tipo: 'walk', h: 1, t: 'Caminata tranquila.' };
+  return di === 5 ? { tipo: 'trail', h: 2, t: 'Tirada libre de trail o BTT. Cuando elijas el siguiente objetivo, la montamos.' } : { tipo: 'btt', h: 1.5, t: 'Rodaje suave.' };
 }
-const TIPO = { btt: ['🚵', 'BTT'], trail: ['🏃', 'Trail'], walk: ['🥾', 'Caminata'], race: ['🏁', 'Prueba'] };
-
-// ---------- GENERADOR DEL PLAN ----------
-function generarPlan(P) {
-  const n = P.dias.length;
-  const keys = n <= 2 ? ['A', 'B'] : n === 3 ? ['A', 'B', 'C'] : ['L1', 'U1', 'L2', 'U2'];
-  const nEj = P.min <= 45 ? 5 : P.min <= 60 ? 6 : 7;
-  const uso = {};
-  const sesiones = keys.map(k => {
-    let slots = PLANTILLAS[k].slots.slice();
-    if (!P.gemelo) slots = slots.filter(s => s !== 'gemelo');
-    if (P.prioridad === 'pierna' && !k.startsWith('L') && !k.startsWith('U')) {
-      const extra = k === 'B' ? 'femoral' : k === 'A' ? 'cadera' : 'unilateral';
-      slots.splice(3, 0, extra);
-    }
-    if (P.prioridad === 'superior' && !k.startsWith('L')) slots.splice(3, 0, k === 'B' ? 'empuje_h' : 'tiron_h');
-    // recortar por tiempo, guardando core y gemelo
-    let fuera = slots.filter(s => s !== 'core' && s !== 'gemelo');
-    const fijos = slots.filter(s => s === 'core' || s === 'gemelo');
-    fuera = fuera.slice(0, Math.max(3, nEj - fijos.length));
-    slots = slots.filter((s, i) => fuera.includes(s) && slots.indexOf(s) === i || fijos.includes(s));
-    const items = slots.map(p => {
-      const c = candidatos(p, P); const u = uso[p] || 0; uso[p] = u + 1;
-      return { p, id: c.length ? c[u % c.length] : null };
-    }).filter(x => x.id);
-    return { k, n: PLANTILLAS[k].n, items };
-  });
-  return { creado: key(today()), sesiones };
+function itemsDia(d) {
+  const out = []; const s = sesionDe(d); const sal = salidaDe(d);
+  if (s) out.push({ k: 'gym', ses: s });
+  if (sal) out.push(Object.assign({ k: 'out' }, sal));
+  if (semana(d) === 25 && dayIdx(d) === 4) out.push({ k: 'rest', t: 'Descanso total: mañana es Monegros. Prepara bici, comida y bebida.' });
+  return out;
 }
-function candidatos(p, P) {
-  P = P || DB.perfil;
-  const ord = P.nivel === 'cero' ? { maq: 0, polea: 1, manc: 2, peso: 3, barra: 4 } : { manc: 0, maq: 1, polea: 2, barra: 3, peso: 4 };
-  return Object.keys(LIB).filter(id => {
-    const e = LIB[id]; if (e.p !== p) return false;
-    if (P.lumbar && !e.lum) return false;
-    if (P.lugar === 'casa' && !['peso', 'manc'].includes(e.eq)) return false;
-    return true;
-  }).sort((a, b) => ord[LIB[a].eq] - ord[LIB[b].eq]);
-}
-function ejDe(ses, i) { return DB.swaps[ses.k + ':' + i] || ses.items[i].id; }
-
-// series y repeticiones de cada hueco, con ajustes de recuperación y descarga
-function receta(id, d) {
-  const e = LIB[id]; const P = DB.perfil;
-  const comp = COMPUESTOS.includes(e.p);
-  let s = comp ? 3 : 2;
-  if (P.prioridad === 'pierna' && ['Pierna', 'Glúteo'].includes(e.m) && e.p !== 'gemelo') s += comp ? 0 : 1;
-  if (P.prioridad === 'pierna' && comp && ['Pierna', 'Glúteo'].includes(e.m)) s += 1;
-  if (e.p === 'core') s = 3;
-  s += DB.volAdj[e.m] || 0;
-  if (descarga(d)) s -= 1;
-  s = Math.max(1, Math.min(5, s));
-  if (e.fijo) s = 2;
-  let r = comp ? (P.nivel === 'cero' ? [10, 12] : [8, 12]) : [12, 15];
-  if (e.seg) r = [20, 40];
-  if (id === 'Dead_Bug') r = [8, 10];
-  if (e.fijo) r = [15, 15];
-  const desc = comp ? 90 : e.p === 'core' ? 45 : 60;
-  return { s, r, desc };
+const hechoItem = (d, it) => it.k === 'gym' ? !!(DB.hecho[key(d)] && DB.hecho[key(d)].gym) : it.k === 'out' ? !!DB.salidas[key(d)] : false;
+function statsSemana(lun) {
+  let p = 0, h = 0;
+  for (let i = 0; i < 7; i++) { const d = addD(lun, i); itemsDia(d).forEach(it => { if (it.k === 'rest') return; p++; if (hechoItem(d, it)) h++; }); }
+  return { p, h, frac: p ? h / p : 0 };
 }
 
-// qué toca cada día
-function diaPlan(d) {
-  const P = DB.perfil; if (!P || !DB.plan) return { tipo: 'nada' };
-  const di = dayIdx(d);
-  const pos = P.dias.indexOf(di);
-  const sal = salidaDe(d);
-  if (pos >= 0) {
-    const ses = DB.plan.sesiones;
-    if (pos >= ses.length) return { tipo: 'cardio', n: 'Bici estática en zona 2', t: '40 min suaves: puedes hablar sin ahogarte.' };
-    // fase de construcción: el último día de gimnasio de la semana pasa a ser bici con intervalos
-    const w = P.finde ? semanaBici(d) : null;
-    if (w >= 14 && w <= 24 && P.dias.length >= 3 && pos === P.dias.length - 1) return { tipo: 'cardio', n: 'Bici con intervalos', t: INTERVALOS, int: true };
-    if (w === 25 && di >= 3) return { tipo: 'cardio', n: 'Activación pre-Monegros', t: '25 min muy suave con 3 cambios de 1 min alegre. Nada más.' };
-    const k = ses[pos % ses.length];
-    return { tipo: 'gym', ses: k, sal };
-  }
-  if (sal) return { tipo: 'salida', sal };
-  return { tipo: 'descanso' };
+// ---------- pesos y progresión ----------
+function sugerencia(it) {
+  const e = LIB[it.id] || {}; const st = DB.prog[it.id];
+  if (it.seg) return { kg: 0, reps: st && st.reps ? st.reps : it.seg[0], nuevo: !st };
+  if (!st) return { kg: e.ini || 0, reps: it.r[0], nuevo: true };
+  return { kg: st.kg, reps: Math.min(Math.max(st.reps || it.r[0], it.r[0]), e.inc ? it.r[1] : it.r[1] + 8), nuevo: false };
 }
-const hechoGym = d => DB.logs.find(l => l.fecha === key(d));
-
-// ---------- PROGRESIÓN AUTOMÁTICA DE PESOS ----------
-function sugerencia(id, r) {
-  const e = LIB[id]; const st = DB.prog[id];
-  if (e.seg) return { kg: 0, reps: st ? st.reps : r[0], nuevo: !st };
-  if (!st) return { kg: DB.perfil.lugar === 'casa' && e.eq === 'manc' ? Math.min(e.ini, 8) : e.ini, reps: r[0], nuevo: true };
-  return { kg: st.kg, reps: Math.min(Math.max(st.reps, r[0]), e.inc ? r[1] : r[1] + 8), nuevo: false };
-}
-function progresar(it) {
-  const e = LIB[it.id]; const hechas = it.sets.filter(s => s.ok); if (!hechas.length) return null;
-  const r = it.r; const st = DB.prog[it.id] || { kg: 0, reps: r[0], fails: 0, best: 0 };
-  const kg = Math.max(...hechas.map(s => +s.kg || 0)); const reps = hechas.map(s => +s.reps || 0);
-  const minR = Math.min(...reps); let msg = null; const antes = st.kg;
-  st.kg = kg;
-  if (e.fijo) { st.reps = r[0]; }
-  else if (e.seg) { if (minR >= st.reps) { st.reps = Math.min(r[1] + 20, minR + 5); msg = `+5 s la próxima vez`; } }
-  else if (!e.inc) { if (minR >= st.reps) { st.reps = Math.min(r[1] + 8, minR + 1); msg = `${st.reps} repeticiones la próxima vez`; } }
-  else if (minR >= r[1] && it.feel !== 'duro') {
-    st.kg = kg + e.inc * (it.feel === 'facil' ? 2 : 1); st.reps = r[0]; st.fails = 0;
+function progresar(it, x) { // it = ejercicio del plan, x = lo hecho {id, sets, feel}
+  const e = LIB[x.id] || {}; const hechas = x.sets.filter(s => s.ok); if (!hechas.length) return null;
+  const st = DB.prog[x.id] || { kg: 0, reps: 0, fails: 0 };
+  const kg = Math.max(...hechas.map(s => +s.kg || 0)); const minR = Math.min(...hechas.map(s => +s.reps || 0));
+  let msg;
+  if (it.seg) {
+    st.kg = 0;
+    if (minR >= (st.reps || it.seg[0]) && x.feel !== 'duro') { st.reps = Math.min(it.seg[1] + 30, minR + 5); msg = `Próxima vez: ${st.reps} s`; }
+    else { st.reps = minR; msg = `Próxima vez: ${minR} s otra vez`; }
+  } else if (it.fijo) { st.kg = kg; st.reps = it.r[0]; msg = 'Mismo peso: es de prevención'; }
+  else if (!e.inc) {
+    st.kg = 0;
+    if (minR >= it.r[0] && x.feel !== 'duro') { st.reps = Math.min(it.r[1] + 8, minR + 1); msg = `Próxima vez: ${st.reps} repeticiones`; }
+    else { st.reps = Math.max(it.r[0], minR); msg = 'Mismas repeticiones'; }
+  } else if ((minR >= it.r[1] && x.feel !== 'duro') || (x.feel === 'facil' && minR >= it.r[0])) {
+    st.kg = kg + e.inc * (x.feel === 'facil' && minR >= it.r[1] ? 2 : 1); st.reps = it.r[0]; st.fails = 0;
     msg = `Sube a ${num(st.kg)} kg`;
-  } else if (minR < r[0]) {
-    st.fails = (st.fails || 0) + 1;
-    if (st.fails >= 2) { st.kg = roundInc(kg * 0.9, e.inc); st.reps = r[0]; st.fails = 0; msg = `Baja a ${num(st.kg)} kg y vuelve a construir`; }
-    else msg = 'Mismo peso, a por las repeticiones';
-  } else { st.fails = 0; st.reps = Math.min(r[1], minR + 1); msg = `Mismo peso, busca ${st.reps} repeticiones`; }
-  const e1 = Math.max(...hechas.map(s => (+s.kg || 0) * (1 + (+s.reps || 0) / 30)));
-  const record = e.inc && st.best && e1 > st.best + 0.01;
-  if (e1 > (st.best || 0)) st.best = e1;
-  DB.prog[it.id] = st;
-  return { msg, record, antes };
+  } else if (minR < it.r[0]) {
+    st.fails = (st.fails || 0) + 1; st.kg = kg;
+    if (st.fails >= 2) { st.kg = roundInc(kg * 0.9, e.inc); st.reps = it.r[0]; st.fails = 0; msg = `Baja a ${num(st.kg)} kg y vuelve a subir`; }
+    else { st.reps = it.r[0]; msg = `Mismo peso (${num(kg)} kg), a por ${it.r[0]} repeticiones`; }
+  } else { st.kg = kg; st.fails = 0; st.reps = Math.min(it.r[1], minR + 1); msg = `Mismo peso (${num(kg)} kg), busca ${st.reps} repeticiones`; }
+  DB.prog[x.id] = st;
+  return msg;
 }
+const presc = (it, n) => it.seg ? `${n} × ${it.seg[0]}-${it.seg[1]} s${it.uni ? ' por lado' : ''}` : `${n} × ${it.r[0] === it.r[1] ? it.r[0] : it.r[0] + '-' + it.r[1]}${it.uni ? ' por lado' : ''}`;
 
-// ---------- NUTRICIÓN ----------
-function pesoActual() { const p = DB.pesos.slice().sort((a, b) => a.f < b.f ? -1 : 1); return p.length ? p[p.length - 1].kg : DB.perfil.peso; }
+// ---------- nutrición ----------
+function pesoActual() { const p = DB.pesos.slice().sort((a, b) => a.f < b.f ? -1 : 1); return p.length ? +p[p.length - 1].kg : PERFIL.peso; }
 function nutri() {
-  const P = DB.perfil; const kg = pesoActual();
-  const bmr = 10 * kg + 6.25 * P.altura - 5 * P.edad + (P.sexo === 'm' ? -161 : 5);
-  const tdee = bmr * 1.4;
-  let def = 0;
-  if (P.objetivo === 'bajar' && kg > P.pesoObj) def = Math.min(P.ritmo, 0.75) * 1100;
-  if (P.objetivo === 'musculo') def = -250;
-  const kcal = Math.max(r10(bmr * 1.05), r10(tdee - def + (DB.nut.ajuste || 0)));
+  const kg = pesoActual();
+  const bmr = 10 * kg + 6.25 * PERFIL.altura - 5 * PERFIL.edad + 5;
+  const def = kg > PERFIL.pesoObj ? PERFIL.ritmo * 1000 : 0;
+  const kcal = Math.max(Math.round(bmr * 1.05 / 10) * 10, Math.round((bmr * 1.45 - def + (DB.ajuste || 0)) / 10) * 10);
   const p = Math.round(1.8 * kg), g = Math.round(0.8 * kg), c = Math.max(0, Math.round((kcal - p * 4 - g * 9) / 4));
-  return { kcal, p, g, c, bmr: Math.round(bmr), def: Math.round(def), kg };
-}
-function extraDia(d) {
-  const s = salidaDe(d); if (!s || !['btt', 'trail', 'race'].includes(s.tipo)) return null;
-  const k = r10(s.h * (s.tipo === 'trail' ? 550 : 450));
-  return { kcal: k, c: Math.round(k * 0.8 / 4), t: s.h >= 2 ? `Durante la salida: 40-60 g de hidrato por hora (plátano, dátiles, bocadillo, bebida).` : 'Salida corta: basta con desayunar bien antes.' };
+  return { kcal, p, g, c };
 }
 
-// ---------- CHEQUEO SEMANAL ----------
-function chequeoPendiente() {
-  if (!DB.plan) return false;
-  const wk = wkey(today());
-  if (DB.recup[wk]) return false;
-  return monday(parse(DB.plan.creado)) < monday(today());
-}
-function aplicarChequeo(resp, pesoKg) {
-  const wk = wkey(today()); const msgs = [];
-  MUSCULOS.forEach(m => {
-    const v = resp[m]; if (!v) return;
-    const a = DB.volAdj[m] || 0;
-    if (v === 1 && a < 2) { DB.volAdj[m] = a + 1; msgs.push(`${m}: vas fresco, +1 serie esta semana.`); }
-    if (v === 3 && a > -1) { DB.volAdj[m] = a - 1; msgs.push(`${m}: cargado, −1 serie para que recupere.`); }
-    if (v === 4) { DB.volAdj[m] = Math.max(-2, a - 1); msgs.push(`${m}: con molestia, −1 serie y sin forzar. Si sigue, para y consúltalo.`); }
-  });
-  if (resp.Pierna >= 3 && DB.perfil.finde) msgs.push('Pierna cargada: la salida del finde, más suave de lo marcado.');
-  if (pesoKg) {
-    const ant = DB.pesos.slice().sort((a, b) => a.f < b.f ? -1 : 1).filter(p => parse(p.f) <= addD(today(), -5)).pop();
-    DB.pesos = DB.pesos.filter(p => p.f !== key(today())); DB.pesos.push({ f: key(today()), kg: pesoKg });
-    const P = DB.perfil;
-    if (ant && P.objetivo === 'bajar' && pesoKg > P.pesoObj) {
-      const sem = Math.max(1, (today() - parse(ant.f)) / DAY / 7);
-      const baja = (ant.kg - pesoKg) / sem;
-      if (baja < P.ritmo * 0.5 && (DB.nut.ajuste || 0) > -400) { DB.nut.ajuste = (DB.nut.ajuste || 0) - 100; msgs.push(`Bajas ${num(baja)} kg/semana: quito 100 kcal al día.`); }
-      else if (baja > Math.max(0.9, P.ritmo * 1.6)) { DB.nut.ajuste = (DB.nut.ajuste || 0) + 150; msgs.push(`Bajas ${num(baja)} kg/semana, demasiado rápido: sumo 150 kcal para no perder fuerza.`); }
-      else msgs.push(`Bajas ${num(baja)} kg/semana: vas bien, calorías igual.`);
-    }
-    if (pesoKg <= P.pesoObj && P.objetivo === 'bajar') msgs.push('¡Peso objetivo alcanzado! Pasas a calorías de mantenimiento.');
-  }
-  const v = volSemanas(3);
-  if (v[0] && v[1] && v[2] && v[2] < v[1] && v[1] < v[0] && !descarga(addD(today(), -7))) {
-    DB.nut.ajuste = (DB.nut.ajuste || 0) + 100; msgs.push('Tus kilos movidos llevan 2 semanas bajando: sumo 100 kcal y vigila el sueño.');
-  }
-  DB.recup[wk] = { resp, msgs };
-  save(); return msgs;
-}
-function volSemanas(n) { // kg totales de las últimas n semanas completas (más antigua primero)
-  const out = []; for (let i = n; i >= 1; i--) { const wk = key(addD(monday(today()), -7 * i)); out.push(DB.logs.filter(l => wkey(parse(l.fecha)) === wk).reduce((a, l) => a + l.vol, 0)); } return out;
-}
-
-// ---------- RENDER ----------
-let tab = 'hoy', planWk = 0;
+// ---------- navegación ----------
+const TABS = [['hoy', '🏠', 'Hoy'], ['rut', '🏋️', 'Rutinas'], ['cam', '🗺️', 'Camino'], ['com', '🍽️', 'Comer'], ['pro', '📈', 'Progreso']];
+let tab = 'hoy', rutSel = null, comSel = 'rec';
 function render() {
   const m = $('#main'); m.innerHTML = '';
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === tab));
-  $('nav').style.display = DB.perfil ? 'flex' : 'none';
-  if (!DB.perfil) return onboarding();
-  ({ hoy: vHoy, plan: vPlan, comida: vComida, progreso: vProgreso, ajustes: vAjustes })[tab](m);
-  window.scrollTo(0, 0);
+  ({ hoy: vHoy, rut: vRutinas, cam: vCamino, com: vComer, pro: vProgreso })[tab](m);
+  const n = $('#nav'); n.innerHTML = '';
+  TABS.forEach(([k, e, t]) => { const b = el(`<button class="${tab === k ? 'on' : ''}"><span>${e}</span>${t}</button>`); b.onclick = () => { tab = k; render(); scrollTo(0, 0); }; n.append(b); });
+}
+function overlay(titulo, sub, onclose) {
+  const o = el(`<div class="ov"><div class="hd"><button class="back">‹</button><div class="grow"><b>${titulo}</b><span>${sub || ''}</span></div></div><div class="bd"></div></div>`);
+  const cerrar = () => { o.remove(); onclose && onclose(); };
+  $('.back', o).onclick = cerrar; document.body.append(o);
+  return { o, bd: $('.bd', o), cerrar, hd: $('.hd', o) };
+}
+function hoja(html) {
+  const o = el(`<div class="ov sheet"><div class="box"><div class="bd" style="padding-bottom:calc(24px + env(safe-area-inset-bottom))"></div></div></div>`);
+  $('.bd', o).innerHTML = html; o.onclick = e => { if (e.target === o) o.remove(); };
+  document.body.append(o); return o;
 }
 
 // ---------- HOY ----------
 function vHoy(m) {
-  const t = today(); const P = DB.perfil; const f = P.finde ? fase(t) : null;
-  m.append(el(`<div class="fecha"><span>${DN[dayIdx(t)]}, ${fmt(t)}</span>${f ? `<span class="ph" style="--c:${f.c}">${f.n}${descarga(t) ? ' · descarga' : ''}</span>` : descarga(t) ? '<span class="ph" style="--c:#a3a3a3">Semana de descarga</span>' : ''}</div>`));
-  if (DB.activo) { const c = el(`<button class="card warn item"><span class="ic">⏱️</span><span class="tx"><b>Entreno en marcha</b><span>${DB.activo.n} · toca para seguir</span></span><span class="st">›</span></button>`); c.onclick = abrirEntreno; m.append(c); }
-  if (chequeoPendiente()) { const c = el(`<button class="card note item"><span class="ic">📋</span><span class="tx"><b>Chequeo de la semana</b><span>Cómo te has recuperado y cuánto pesas. 1 minuto.</span></span><span class="st">›</span></button>`); c.onclick = abrirChequeo; m.append(c); }
-  // anillos de la semana
-  const R = retoSemana(monday(t));
-  let minP = 0, minH = 0; for (let i = 0; i < 7; i++) { const d = addD(monday(t), i); const s = salidaDe(d); if (s) minP += s.h * 60; const r = DB.salidas[key(d)]; if (r) minH += r.min; }
-  const ps = DB.pesos.slice().sort((a, b) => a.f < b.f ? -1 : 1);
-  const kg0 = ps.length ? ps[0].kg : P.peso, kgA = pesoActual();
-  const fPeso = P.objetivo === 'bajar' && kg0 > P.pesoObj ? (kg0 - kgA) / (kg0 - P.pesoObj) : null;
-  m.append(el(`<div class="rings">${anillo(R.gP ? R.gH / R.gP : 0, '#f97316', `${R.gH}/${R.gP}`, 'Gimnasio')}
-    ${P.finde ? anillo(minP ? minH / minP : 0, '#38bdf8', hm(minH / 60).replace(' min', '′'), 'Bici y monte') : ''}
-    ${fPeso != null ? anillo(fPeso, '#22c55e', `${num(kg0 - kgA)}`, 'kg bajados') : anillo(R.frac, '#22c55e', `${Math.round(R.frac * 100)}%`, 'Semana')}</div>`));
-  m.append(tarjetaHoy(t));
-  const cm = camino(); if (cm) m.append(el(cm));
-  const N = nutri(); const ex = extraDia(t);
-  const c = el(`<button class="card item"><span class="ic">🍽️</span><span class="tx"><b>${r10(N.kcal + (ex ? ex.kcal : 0))} kcal hoy</b><span>${N.p} g de proteína${ex ? ` · +${ex.kcal} por la salida` : ''}</span></span><span class="st">›</span></button>`);
-  c.onclick = () => { tab = 'comida'; render(); }; m.append(c);
-  m.append(el('<h3>Próximos días</h3>'));
-  for (let i = 1; i <= 6; i++) { const d = addD(t, i); const x = diaPlan(d); if (x.tipo === 'descanso') continue; m.append(tarjetaDia(d, false)); }
-}
-// tarjeta grande de hoy, con foto
-function tarjetaHoy(t) {
-  const x = diaPlan(t); const box = el('<div class="hoy"></div>');
-  if (x.tipo === 'gym') {
-    const ses = x.ses; const h = hechoGym(t); const ids = ses.items.map((y, i) => ejDe(ses, i));
-    const ult = DB.logs.filter(l => l.k === ses.k).pop(); const sube = ult && (ult.res || []).find(r => /^Sube/.test(r.msg || '') && ids.includes(r.id)); const rec = sube ? sube.id : null;
-    const c = el(`<div class="hcard ${h ? 'ok' : ''}"><div class="hfoto">${ids.slice(0, 3).map(id => `<img src="${img(id)}" alt="">`).join('')}<span class="hpill">Hoy · ${ses.n}</span></div>
-      <div class="hbody"><div><b>${h ? `Hecho · ${Math.round(h.dur)} min · ${num(h.vol / 1000)} t` : `${ses.items.length} ejercicios · ~${DB.perfil.min} min`}</b><small>${h ? 'Toca para ver el resumen' : rec ? `Hoy toca subir peso en ${LIB[rec].n.toLowerCase()}` : 'Toca las fotos para ver los ejercicios'}</small></div>
-      ${h ? '<span class="st">✓</span>' : DB.activo ? '' : '<button class="btn">Empezar</button>'}</div></div>`);
-    c.querySelector('.hfoto').onclick = () => h ? verResumen(h) : verSesion(ses, t);
-    const b = c.querySelector('.hbody .btn'); if (b) b.onclick = () => empezar(ses, t);
-    if (h) c.querySelector('.hbody').onclick = () => verResumen(h);
-    box.append(c);
-    if (x.sal) box.append(tarjetaSalida(t, x.sal, 'También: '));
-    return box;
+  const t = today(), w = semana(t), f = fase(Math.max(1, w)), falta = dias(t, RACE);
+  m.append(el(`<div class="top"><div><div class="d">${DN[dayIdx(t)]}, ${fmt(t)}</div><h1>${w >= 1 ? 'Semana ' + w : 'Pretemporada'}</h1></div><span class="pill" style="--c:${f.c}">${f.n}${descarga(w) ? ' · descarga' : ''}</span></div>`));
+  const st = statsSemana(monday(t));
+  m.append(el(`<div class="hero"><div class="row"><div class="grow"><div class="cnt">${falta > 0 ? falta : '🏁'}</div><div class="lbl">${falta > 0 ? 'días para Monegros' : 'Monegros'}</div></div>
+    <div style="text-align:right"><div class="bebas" style="font-size:40px;line-height:1">${st.h}<span class="mut" style="font-size:24px">/${st.p}</span></div><div class="lbl">hechos esta semana</div></div></div>
+    <div class="bar"><i style="width:${Math.min(100, Math.max(0, (w - 1 + st.frac) / 25 * 100))}%"></i></div><div class="small mut" style="margin-top:6px">${f.t}</div></div>`));
+  const wk = el('<div class="week"></div>');
+  for (let i = 0; i < 7; i++) {
+    const d = addD(monday(t), i), its = itemsDia(d).filter(x => x.k !== 'rest');
+    const ic = its.map(x => hechoItem(d, x) ? '✅' : x.k === 'gym' ? '🏋️' : TIPO[x.tipo][0]).join('');
+    wk.append(el(`<div class="${key(d) === key(t) ? 'hoy' : ''} ${its.length && its.every(x => hechoItem(d, x)) ? 'fin' : ''}">${DC[i]}<b>${d.getDate()}</b><i>${ic || '·'}</i></div>`));
   }
-  if (x.tipo === 'salida') {
-    const s = x.sal; const r = DB.salidas[key(t)]; const [ic, n] = TIPO[s.tipo];
-    const c = el(`<div class="hcard out ${r ? 'ok' : ''}"><div class="hfoto big"><span class="hic">${ic}</span><span class="hpill">Hoy · ${n} · ${hm(s.h)}</span></div>
-      <div class="hbody"><div><b>${r ? `Hecho · ${r.min} min · ${r.sens}` : s.t}</b><small>${r ? 'Toca para cambiarlo' : 'Cuando vuelvas, apunta los minutos'}</small></div>${r ? '<span class="st">✓</span>' : '<button class="btn">Apuntar</button>'}</div></div>`);
-    c.onclick = () => apuntarSalida(t, s); box.append(c); return box;
-  }
-  box.append(tarjetaDia(t, true)); return box;
+  m.append(wk);
+  if (chequeoPendiente()) { const c = el(`<button class="card btn warn"><div class="row"><div class="ic">📝</div><div class="grow"><b>Chequeo de la semana</b><div class="small mut">1 minuto: cómo vas, lumbar, gemelo y peso</div></div><span class="sm">Hacer</span></div></button>`); c.onclick = abrirChequeo; m.append(c); }
+  m.append(el('<div class="sec">Hoy</div>'));
+  const its = itemsDia(t);
+  if (!its.length) {
+    let n = addD(t, 1); while (!itemsDia(n).length && n - t < 8 * DAY) n = addD(n, 1);
+    m.append(el(`<div class="card"><div class="row"><div class="ic">😌</div><div class="grow"><b>Día de descanso</b><div class="small mut">Lo próximo: ${DN[dayIdx(n)].toLowerCase()} ${fmt(n)}</div></div></div></div>`));
+    itemsDia(n).forEach(it => m.append(tarjeta(n, it, true)));
+  } else its.forEach(it => m.append(tarjeta(t, it)));
 }
-function tarjetaDia(d, grande) {
-  const x = diaPlan(d); const lab = grande ? '' : `${DN[dayIdx(d)]} ${d.getDate()} · `;
-  const pas = d < today();
-  if (x.tipo === 'gym') {
-    const ses = x.ses; const h = hechoGym(d);
-    const c = el(`<div></div>`);
-    const b = el(`<button class="card item gym ${h ? 'ok' : ''}"><span class="ic">🏋️</span><span class="tx"><b>${lab}${ses.n}</b><span>${h ? `Hecho · ${Math.round(h.dur)} min · ${num(h.vol / 1000)} t movidas` : `${ses.items.length} ejercicios · ~${DB.perfil.min} min`}</span></span><span class="st">${h ? '✓' : '›'}</span></button>`);
-    b.onclick = () => h ? verResumen(h) : verSesion(ses, d); c.append(b);
-    if (grande && !h && !DB.activo) { const s = el('<button class="btn big wide">Empezar entreno</button>'); s.onclick = () => empezar(ses, d); c.append(s); }
-    if (x.sal) c.append(tarjetaSalida(d, x.sal, lab));
+function tarjeta(d, it, futuro) {
+  if (it.k === 'rest') return el(`<div class="card note"><b>🏁 ${it.t}</b></div>`);
+  const ok = hechoItem(d, it);
+  if (it.k === 'gym') {
+    const S = SESIONES[it.ses], dr = DB.draft && DB.draft.k === key(d) && DB.draft.ses === it.ses;
+    const c = el(`<div class="card ${ok ? 'ok' : ''}" style="border-left:4px solid ${S.c}">
+      <div class="row"><div class="grow"><div class="small mut">${S.dia.toUpperCase()} · 6:00 · 1 HORA${suave(d) ? ' · SEMANA SUAVE' : ''}</div><h2 style="font-size:30px;line-height:1.05">${S.n}</h2></div>${ok ? '<div style="font-size:30px">✅</div>' : ''}</div>
+      <div class="row" style="gap:6px;margin:10px 0;overflow:hidden">${S.items.slice(0, 5).map(x => `<img class="thumb" src="${im(x.id, 1)}" alt="" style="width:62px;height:46px">`).join('')}</div>
+      <div class="small mut">Calentamiento 8' · ${S.items.length} ejercicios · cinta 12' · 12 estiramientos</div>
+      ${futuro ? '' : `<button class="big" style="margin-top:12px">${ok ? 'Ver lo que hice' : dr ? 'CONTINUAR' : 'EMPEZAR'}</button>`}</div>`);
+    const b = $('button.big', c); if (b) b.onclick = () => ok ? verResumenDia(key(d)) : abrirEntreno(it.ses, d);
     return c;
   }
-  if (x.tipo === 'cardio') {
-    const h = hechoGym(d);
-    const c = el(`<button class="card item str ${h ? 'ok' : ''}"><span class="ic">🚴</span><span class="tx"><b>${lab}${x.n}</b><span>${x.t}</span></span><span class="st">${h ? '✓' : ''}</span></button>`);
-    c.onclick = () => { if (h) return; if (confirm('¿Marcar como hecho?')) { DB.logs.push({ fecha: key(d), ses: x.n, dur: 30, vol: 0, items: [], cardio: true }); save(); render(); } };
-    return c;
-  }
-  if (x.tipo === 'salida') return tarjetaSalida(d, x.sal, lab);
-  if (x.tipo === 'descanso') return el(`<div class="card item"><span class="ic">😌</span><span class="tx"><b>${lab}Descanso</b><span>Caminar un rato y estirar si te apetece.</span></span></div>`);
-  return el('<div></div>');
-}
-function tarjetaSalida(d, s, lab) {
-  const r = DB.salidas[key(d)]; const [ic, n] = TIPO[s.tipo];
-  const c = el(`<button class="card item out ${r ? 'ok' : ''}"><span class="ic">${ic}</span><span class="tx"><b>${lab}${n} · ${hm(s.h)}</b><span>${r ? `Hecho · ${r.min} min · ${r.sens}` : s.t}</span></span><span class="st">${r ? '✓' : '›'}</span></button>`);
-  c.onclick = () => apuntarSalida(d, s); return c;
-}
-const hm = h => { const t = Math.round(h * 60); return t < 60 ? `${t} min` : `${Math.floor(t / 60)} h${t % 60 ? ' ' + pad(t % 60) : ''}`; };
-
-function apuntarSalida(d, s) {
-  const r = DB.salidas[key(d)] || {}; const [ic, n] = TIPO[s.tipo];
-  const o = overlay(`${ic} ${n}`, `${DN[dayIdx(d)]} ${fmt(d)}`);
-  o.body.innerHTML = `<div class="card"><b>Lo que toca: ${hm(s.h)}</b><p>${s.t}</p></div>
-  <label class="lab">Minutos que has hecho<input id="smin" type="number" inputmode="numeric" value="${r.min || Math.round(s.h * 60)}"></label>
-  <div class="lab">¿Qué tal?</div><div class="row" id="ssens">${['Bien', 'Cansado', 'Molestia'].map(x => `<button class="btn ghost ${r.sens === x ? 'sel' : ''}">${x}</button>`).join('')}</div>
-  <button class="btn big wide" id="sok">Guardar</button>${r.min ? '<button class="btn ghost wide" id="sdel">Borrar este registro</button>' : ''}`;
-  let sens = r.sens || 'Bien';
-  o.body.querySelectorAll('#ssens button').forEach(b => b.onclick = () => { sens = b.textContent; o.body.querySelectorAll('#ssens button').forEach(x => x.classList.toggle('sel', x === b)); });
-  o.body.querySelector('#sok').onclick = () => {
-    DB.salidas[key(d)] = { min: +o.body.querySelector('#smin').value || 0, sens, tipo: s.tipo }; save(); o.close(); render();
-    if (sens === 'Molestia') toast('Con molestia: la próxima, más suave. Si sigue, para.');
-  };
-  const del = o.body.querySelector('#sdel'); if (del) del.onclick = () => { delete DB.salidas[key(d)]; save(); o.close(); render(); };
-}
-
-// ---------- OVERLAY ----------
-function overlay(t, sub, onclose) {
-  const o = el(`<div class="over"><div class="ohead"><button class="back">‹</button><div><b>${t}</b><span>${sub || ''}</span></div></div><div class="obody"></div></div>`);
-  document.body.append(o); document.body.style.overflow = 'hidden';
-  const api = { el: o, body: o.querySelector('.obody'), head: o.querySelector('.ohead'), close() { o.remove(); if (!document.querySelector('.over')) document.body.style.overflow = ''; if (onclose) onclose(); } };
-  o.querySelector('.back').onclick = api.close; return api;
-}
-
-// ---------- FICHA DE EJERCICIO ----------
-function ficha(id) {
-  const e = LIB[id] || ST[id];
-  const o = overlay(e.n, LIB[id] ? `${PATRON_N[e.p]} · ${{ maq: 'máquina', polea: 'polea', manc: 'mancuernas', peso: 'peso corporal', barra: 'barra' }[e.eq]}` : 'Estiramiento');
-  const st = DB.prog[id];
-  o.body.innerHTML = `<div class="pics"><img src="img/${id}_0.jpg" alt=""><img src="img/${id}_1.jpg" alt=""></div><div class="piclab"><span>Inicio</span><span>Final</span></div>
-  ${e.pasos ? `<h4>Cómo se hace</h4><ol>${e.pasos.map(x => `<li>${x}</li>`).join('')}</ol>` : `<p>${e.t}</p>`}
-  ${e.err && e.err.length ? `<h4>Errores típicos</h4><ul class="err">${e.err.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}
-  ${e.gem && DB.perfil.gemelo ? `<div class="card gem">🦵 ${e.gem}</div>` : ''}
-  ${st && LIB[id] && LIB[id].inc ? `<div class="card"><b>Tu peso ahora: ${num(st.kg)} kg</b><p class="mut">Mejor marca estimada (1 repetición): ${num(st.best || 0)} kg</p>${grafEj(id)}</div>` : ''}`;
-}
-function grafEj(id) {
-  const pts = [];
-  DB.logs.forEach(l => (l.items || []).forEach(it => { if (it.id !== id) return; const h = it.sets.filter(s => s.ok); if (h.length) pts.push({ x: +parse(l.fecha), y: Math.max(...h.map(s => +s.kg || 0)) }); }));
-  return pts.length > 1 ? linea(pts, null, 'kg') : '';
-}
-
-// ---------- ESTIRAMIENTOS CON FOTOS ----------
-function listaEstir(ids) {
-  const box = el('<div></div>');
-  ids.forEach(id => {
-    const e = ST[id];
-    const c = el(`<button class="card estir"><div class="pics"><img src="img/${id}_0.jpg" alt="" loading="lazy"><img src="img/${id}_1.jpg" alt="" loading="lazy"></div>
-      <div class="etx"><b>${e.n}</b><span class="eseg">${e.s} s${e.lados ? ' por lado' : ''}</span></div><p class="mut">${e.t}</p></button>`);
-    c.onclick = () => ficha(id); box.append(c);
-  });
-  return box;
-}
-function verEstiramientos() {
-  const o = overlay('Estiramientos', 'Toca uno para verlo en grande');
-  o.body.append(el('<h4>Después del gimnasio (5 min)</h4>'));
-  o.body.append(listaEstir(STRETCH_POST));
-  o.body.append(el('<h4>Más estiramientos (después de bici o monte)</h4>'));
-  o.body.append(listaEstir(Object.keys(ST).filter(id => !STRETCH_POST.includes(id))));
-}
-
-// ---------- VER SESIÓN / CAMBIAR EJERCICIO ----------
-function verSesion(ses, d) {
-  const o = overlay(ses.n, d ? `${DN[dayIdx(d)]} ${fmt(d)}${descarga(d) ? ' · descarga' : ''}` : 'Tu plan');
-  const pint = () => {
-    o.body.innerHTML = `<div class="card warm">🔥 <b>Calentamiento:</b> ${CALENTAMIENTO}</div>`;
-    ses.items.forEach((x, i) => {
-      const id = ejDe(ses, i); const e = LIB[id]; const rc = receta(id, d || today()); const sg = sugerencia(id, rc.r);
-      const c = el(`<div class="card exrow"><img src="${img(id)}" alt=""><span class="tx"><b>${e.n}</b><span>${rc.s} × ${e.seg ? `${sg.reps} s` : `${rc.r[0]}-${rc.r[1]}`}${e.inc ? ` · ${num(sg.kg)} kg${sg.nuevo ? ' (prueba)' : ''}` : ''}</span></span><button class="btn ghost sm">⇄</button></div>`);
-      c.querySelector('img').onclick = c.querySelector('.tx').onclick = () => ficha(id);
-      c.querySelector('button').onclick = () => cambiar(ses, i, () => pint());
-      o.body.append(c);
-    });
-    if (DB.perfil.finde) o.body.append(el(`<div class="card mut">🚴 Al final: 10-12 min de bici estática suave (zona 2).</div>`));
-    if (d && !hechoGym(d) && !DB.activo) { const b = el('<button class="btn big wide">Empezar entreno</button>'); b.onclick = () => { o.close(); empezar(ses, d); }; o.body.append(b); }
-  };
-  pint();
-}
-function cambiar(ses, i, done) {
-  const actual = ejDe(ses, i); const p = LIB[actual].p;
-  const c = candidatos(p).filter(x => x !== actual);
-  const o = overlay('Cambiar ejercicio', `${PATRON_N[p]} · se queda guardado`);
-  if (!c.length) o.body.innerHTML = '<p class="mut">No hay otro ejercicio equivalente con tu material.</p>';
-  c.forEach(id => {
-    const b = el(`<button class="card exrow"><img src="${img(id)}" alt=""><span class="tx"><b>${LIB[id].n}</b><span>${{ maq: 'Máquina', polea: 'Polea', manc: 'Mancuernas', peso: 'Peso corporal', barra: 'Barra' }[LIB[id].eq]}</span></span><span class="st">›</span></button>`);
-    b.onclick = () => { DB.swaps[ses.k + ':' + i] = id; save(); o.close(); toast('Cambiado. La app lo recordará.'); done(id); };
-    o.body.append(b);
-  });
-}
-
-// ---------- ENTRENO EN MARCHA ----------
-function empezar(ses, d) {
-  const items = ses.items.map((x, i) => {
-    const id = ejDe(ses, i); const rc = receta(id, d); const sg = sugerencia(id, rc.r);
-    return { id, i, r: rc.r, desc: rc.desc, seg: !!LIB[id].seg, feel: null, sets: Array.from({ length: rc.s }, () => ({ kg: sg.kg, reps: sg.reps, ok: false })), nuevo: sg.nuevo };
-  });
-  DB.activo = { k: ses.k, n: ses.n, fecha: key(d), t0: Date.now(), pausa: 0, pausadoEn: null, items, abierto: 0 };
-  save(); render(); abrirEntreno();
-}
-let timerInt = null, descInt = null;
-function abrirEntreno() {
-  const A = DB.activo; if (!A) return;
-  const o = overlay(A.n, '', () => { clearInterval(timerInt); render(); });
-  const reloj = el(`<div class="reloj"><b id="tt">0:00</b><button class="btn ghost sm" id="tp"></button></div>`);
-  o.head.append(reloj);
-  const tick = () => { const ms = (A.pausadoEn || Date.now()) - A.t0 - A.pausa; const s = Math.max(0, Math.floor(ms / 1000)); reloj.querySelector('#tt').textContent = `${Math.floor(s / 60)}:${pad(s % 60)}`; reloj.querySelector('#tp').textContent = A.pausadoEn ? 'Seguir' : 'Pausa'; };
-  reloj.querySelector('#tp').onclick = () => { if (A.pausadoEn) { A.pausa += Date.now() - A.pausadoEn; A.pausadoEn = null; } else A.pausadoEn = Date.now(); save(); tick(); };
-  clearInterval(timerInt); timerInt = setInterval(tick, 1000); tick();
-  const pint = () => {
-    o.body.innerHTML = '';
-    if (descarga(parse(A.fecha))) o.body.append(el('<div class="card note"><b>Semana de descarga</b><p>Una serie menos y mismos pesos. Sales con ganas.</p></div>'));
-    o.body.append(el(`<div class="card warm">🔥 <b>Calentamiento:</b> ${CALENTAMIENTO}</div>`));
-    A.items.forEach((it, n) => o.body.append(tarjetaEj(it, n, pint)));
-    const vc = el(`<button class="card item"><span class="ic">🧘</span><span class="tx"><b>Vuelta a la calma</b><span>${STRETCH_POST.length} estiramientos con fotos · 5 min</span></span><span class="st">›</span></button>`);
-    vc.onclick = () => { const o2 = overlay('Vuelta a la calma', 'Toca uno para verlo en grande'); o2.body.append(listaEstir(STRETCH_POST)); };
-    o.body.append(vc);
-    const fin = el('<button class="btn big wide">Terminar entreno</button>'); fin.onclick = () => terminar(o); o.body.append(fin);
-    const dis = el('<button class="btn ghost wide">Descartar entreno</button>');
-    dis.onclick = () => { if (confirm('¿Descartar este entreno? No se guarda nada.')) { DB.activo = null; save(); o.close(); } };
-    o.body.append(dis);
-  };
-  pint();
-}
-function tarjetaEj(it, n, repaint) {
-  const A = DB.activo; const e = LIB[it.id]; const abierto = A.abierto === n;
-  const hechas = it.sets.filter(s => s.ok).length; const todo = hechas === it.sets.length;
-  const c = el(`<div class="card exc ${todo ? 'ok' : ''}"></div>`);
-  const h = el(`<button class="exrow"><img src="${img(it.id)}" alt=""><span class="tx"><b>${e.n}</b><span>${hechas}/${it.sets.length} series · ${it.seg ? 'segundos' : `${it.r[0]}-${it.r[1]} reps`}</span></span><span class="st">${todo ? '✓' : abierto ? '▾' : '▸'}</span></button>`);
-  h.onclick = () => { A.abierto = abierto ? -1 : n; save(); repaint(); }; c.append(h);
-  if (!abierto) return c;
-  const anim = el(`<div class="anim"><img src="img/${it.id}_0.jpg" alt=""><img src="img/${it.id}_1.jpg" alt="" class="b"></div>`); c.append(anim);
-  if (it.nuevo && e.inc) c.append(el(`<div class="card sug">🔎 Primera vez: el peso es orientativo. Ajústalo hasta que la última repetición cueste, pero te queden 2 en la recámara.</div>`));
-  if (e.gem && DB.perfil.gemelo) c.append(el(`<div class="card gem">🦵 ${e.gem}</div>`));
-  const box = el('<div class="sets"></div>');
-  it.sets.forEach((s, j) => {
-    const r = el(`<div class="set ${s.ok ? 'ok' : ''}"><span class="sn">${j + 1}</span>
-      ${e.inc ? `<label><span>kg${e.eq === 'manc' && !e.uni && !e.una ? ' (c/u)' : ''}</span><input type="number" inputmode="decimal" step="0.5" value="${s.kg}"></label>` : ''}
-      <label><span>${it.seg ? 'segundos' : 'repes'}</span><input type="number" inputmode="numeric" value="${s.reps}"></label>
-      <button class="chk">${s.ok ? '✓' : '○'}</button></div>`);
-    const ins = r.querySelectorAll('input');
-    if (e.inc) ins[0].onchange = () => { s.kg = +ins[0].value || 0; for (let k = j + 1; k < it.sets.length; k++) if (!it.sets[k].ok) it.sets[k].kg = s.kg; save(); repaint(); };
-    ins[ins.length - 1].onchange = () => { s.reps = +ins[ins.length - 1].value || 0; save(); };
-    r.querySelector('.chk').onclick = () => {
-      s.kg = e.inc ? +ins[0].value || 0 : 0; s.reps = +ins[ins.length - 1].value || 0; s.ok = !s.ok; save();
-      if (s.ok && it.sets.some(x => !x.ok)) descanso(it.desc);
-      repaint();
-    };
-    box.append(r);
-  });
-  c.append(box);
-  const row = el(`<div class="row"><button class="btn ghost sm">+ Serie</button><button class="btn ghost sm">⇄ Cambiar</button><button class="btn ghost sm">ⓘ Ficha</button></div>`);
-  const [bAdd, bCh, bFi] = row.querySelectorAll('button');
-  bAdd.onclick = () => { const l = it.sets[it.sets.length - 1]; it.sets.push({ kg: l.kg, reps: l.reps, ok: false }); save(); repaint(); };
-  bFi.onclick = () => ficha(it.id);
-  bCh.onclick = () => { const ses = DB.plan.sesiones.find(x => x.k === A.k); if (!ses) return; cambiar(ses, it.i, id => { const sg = sugerencia(id, it.r); it.id = id; it.seg = !!LIB[id].seg; it.nuevo = sg.nuevo; it.sets = it.sets.map(() => ({ kg: sg.kg, reps: sg.reps, ok: false })); save(); repaint(); }); };
-  c.append(row);
-  if (todo) {
-    const f = el(`<div><div class="lab">¿Cómo ha ido?</div><div class="row">${[['facil', 'Fácil'], ['bien', 'Bien'], ['duro', 'Duro']].map(([k, t]) => `<button class="btn ghost ${it.feel === k ? 'sel' : ''}" data-k="${k}">${t}</button>`).join('')}</div></div>`);
-    f.querySelectorAll('button').forEach(b => b.onclick = () => { it.feel = b.dataset.k; const nx = A.items.findIndex(x => x.sets.some(s => !s.ok)); A.abierto = nx; save(); repaint(); });
-    c.append(f);
-  }
+  const s = DB.salidas[key(d)];
+  const c = el(`<div class="card ${ok ? 'ok' : ''}" style="border-left:4px solid var(--blue)"><div class="row"><div class="ic">${TIPO[it.tipo][0]}</div><div class="grow"><div class="small mut">${TIPO[it.tipo][1].toUpperCase()} · ${horas(it.h)}</div><b>${esc(it.t)}</b>
+    ${s ? `<div class="small" style="color:var(--accent);margin-top:4px">Hecho: ${s.km ? num(+s.km) + ' km · ' : ''}${s.h ? horas(+s.h) : ''}${s.des ? ' · ' + s.des + ' m' : ''}</div>` : ''}</div></div>
+    ${futuro ? '' : `<button class="sm ${ok ? 'ghost' : ''}" style="margin-top:10px">${ok ? 'Editar' : 'Apuntar salida'}</button>`}</div>`);
+  const b = $('button', c); if (b) b.onclick = () => apuntarSalida(d, it);
   return c;
 }
-function descanso(seg) {
-  clearInterval(descInt); document.querySelectorAll('.rest').forEach(x => x.remove());
-  let fin = Date.now() + seg * 1000;
-  const b = el(`<div class="rest"><span>Descanso</span><b>0:00</b><button class="btn ghost sm">+15 s</button><button class="btn sm">Saltar</button></div>`);
-  document.body.append(b);
-  const [mas, sal] = b.querySelectorAll('button');
-  const t = () => { const s = Math.ceil((fin - Date.now()) / 1000); if (s <= 0) { clearInterval(descInt); b.remove(); try { navigator.vibrate && navigator.vibrate([300, 120, 300]); } catch (e) { } toast('¡A por la siguiente serie!'); return; } b.querySelector('b').textContent = `${Math.floor(s / 60)}:${pad(s % 60)}`; };
-  mas.onclick = () => { fin += 15000; t(); }; sal.onclick = () => { clearInterval(descInt); b.remove(); };
-  descInt = setInterval(t, 250); t();
-}
-function terminar(o) {
-  const A = DB.activo; const hechas = A.items.reduce((a, it) => a + it.sets.filter(s => s.ok).length, 0);
-  if (!hechas) return toast('Marca al menos una serie con ○');
-  const pend = A.items.reduce((a, it) => a + it.sets.filter(s => !s.ok).length, 0);
-  if (pend && !confirm(`Te quedan ${pend} series sin marcar. ¿Terminar igualmente?`)) return;
-  const fin = A.pausadoEn || Date.now();
-  const dur = (fin - A.t0 - A.pausa) / 60000;
-  let vol = 0; const res = [];
-  A.items.forEach(it => {
-    const e = LIB[it.id];
-    it.sets.filter(s => s.ok).forEach(s => vol += (+s.kg || 0) * (+s.reps || 0) * (e.eq === 'manc' && !e.uni && !e.una ? 2 : 1) * (e.seg ? 0 : 1));
-    const p = progresar(it); if (p) res.push({ id: it.id, ...p });
+
+// ---------- RUTINAS (estilo lámina) ----------
+function vRutinas(m) {
+  if (!rutSel) rutSel = sesionDe(today()) || 'L';
+  m.append(el('<div class="top"><h1>Rutinas</h1><span class="mut small">L · X · V a las 6:00</span></div>'));
+  const ch = el('<div class="chips"></div>');
+  Object.entries(SESIONES).forEach(([k, S]) => { const b = el(`<button class="chip ${rutSel === k ? 'on' : ''}">${S.dia}</button>`); b.onclick = () => { rutSel = k; render(); }; ch.append(b); });
+  m.append(ch);
+  const S = SESIONES[rutSel];
+  m.append(el(`<div class="lam" style="--c:${S.c}"><div class="lam-t">${S.n}</div><div class="lam-s">${S.dia} · 1 hora · ${S.items.length} ejercicios</div></div>`));
+  m.append(bloqueLamina(rutSel, 'Guarda aquí la captura de la rutina que te gusta'));
+  m.append(el(`<div class="sec">1 · Calentamiento · 8 min</div>`));
+  const cal = el('<div class="card"></div>');
+  CALENTAMIENTO.forEach(c => cal.append(el(`<div class="exrow" style="margin-bottom:8px">${c.id ? `<img src="${im(c.id)}" alt="">` : '<div class="thumb ico">🔁</div>'}<div class="grow"><b>${c.n}</b><div class="small mut">${c.t}</div></div></div>`)));
+  m.append(cal);
+  m.append(el(`<div class="sec">2 · Fuerza · ${S.items.length} ejercicios</div>`));
+  S.items.forEach((it, i) => {
+    const e = LIB[it.id], sg = sugerencia(it);
+    const c = el(`<button class="card btn"><div class="row" style="align-items:flex-start"><span class="nb">${i + 1}</span><div class="grow"><div class="lam-n">${e.n}</div><div class="small mut">${e.mus || e.m}</div></div><span class="sr">${presc(it, it.s)}</span></div>
+      <div class="pair"><div><img src="${im(it.id, 0)}" alt="" loading="lazy"><span>Inicial</span></div><div><img src="${im(it.id, 1)}" alt="" loading="lazy"><span>Final</span></div></div>
+      <div class="small" style="color:var(--accent)">${it.seg ? `Tu tiempo: ${sg.reps} s` : !e.inc ? `Peso corporal · ${sg.reps} repeticiones` : sg.nuevo ? `Primera vez: empieza con unos ${num(sg.kg)} kg` : `Tu peso: ${num(sg.kg)} kg`} · descanso ${it.d} s</div></button>`);
+    c.onclick = () => ficha(it.id); m.append(c);
   });
-  const prev = DB.logs.filter(l => l.k === A.k).pop();
-  const log = { fecha: A.fecha, k: A.k, ses: A.n, dur, vol, items: A.items.map(it => ({ id: it.id, feel: it.feel, sets: it.sets })), res, prevVol: prev ? prev.vol : null };
-  DB.logs.push(log); DB.activo = null; save();
-  clearInterval(descInt); document.querySelectorAll('.rest').forEach(x => x.remove());
-  o.close(); verResumen(log, true);
-  if (res.some(r => r.record)) setTimeout(confeti, 300);
+  m.append(el(`<div class="sec">3 · Cardio · ${CARDIO.min} min</div>`));
+  const ca = el(`<button class="card btn"><div class="exrow"><img src="${im(CARDIO.id)}" alt=""><div class="grow"><b>Cinta de correr · ${CARDIO.min} min</b><div class="small mut">${CARDIO.t}</div></div></div></button>`);
+  ca.onclick = () => ficha(CARDIO.id); m.append(ca);
+  m.append(el(`<div class="sec">4 · Estiramientos · 20-30 s cada uno</div>`));
+  m.append(gridEst());
+  m.append(bloqueLamina('est', 'Guarda aquí la captura de los estiramientos'));
+  const est = el('<button class="big ghost" style="margin:4px 0 12px">Hacer solo los estiramientos</button>'); est.onclick = () => estirar(null); m.append(est);
+  const go = el(`<button class="big">EMPEZAR ${S.dia.toUpperCase()}</button>`); go.onclick = () => abrirEntreno(rutSel, today()); m.append(go);
 }
-function verResumen(l, recien) {
-  const o = overlay(recien ? '¡Entreno hecho! 💪' : l.ses, `${DN[dayIdx(parse(l.fecha))]} ${fmt(parse(l.fecha))}`, () => render());
-  const series = (l.items || []).reduce((a, it) => a + it.sets.filter(s => s.ok).length, 0);
-  const recs = (l.res || []).filter(r => r.record);
-  const dif = l.prevVol ? Math.round((l.vol - l.prevVol) / l.prevVol * 100) : null;
-  o.body.innerHTML = `<div class="stats"><div><b>${Math.round(l.dur)}</b><span>minutos</span></div><div><b>${num(l.vol / 1000)}</b><span>toneladas</span></div><div><b>${series}</b><span>series</span></div></div>
-  ${dif != null ? `<div class="card ${dif >= 0 ? 'gem' : ''}">${dif >= 0 ? '📈' : '📉'} ${dif >= 0 ? '+' : ''}${dif}% de kilos movidos respecto a la última vez que hiciste esta sesión.</div>` : ''}
-  ${recs.length ? `<div class="card warn"><b>🏆 ${recs.length} récord${recs.length > 1 ? 's' : ''}</b><ul>${recs.map(r => `<li>${LIB[r.id].n}</li>`).join('')}</ul></div>` : ''}
-  <h4>Para la próxima vez</h4>${(l.res || []).map(r => `<div class="card exrow"><img src="${img(r.id)}" alt=""><span class="tx"><b>${LIB[r.id].n}</b><span class="prog">${r.msg || 'Igual'}</span></span></div>`).join('')}
-  `;
-  if (recien) { o.body.append(el('<h4>Vuelta a la calma (5 min)</h4>')); o.body.append(listaEstir(STRETCH_POST)); }
-  if (!recien) { const b = el('<button class="btn ghost wide">Borrar este entreno</button>'); b.onclick = () => { if (confirm('¿Borrar este entreno del historial?')) { DB.logs = DB.logs.filter(x => x !== l); save(); o.close(); } }; o.body.append(b); }
-  else { const b = el('<button class="btn big wide">Listo</button>'); b.onclick = () => o.close(); o.body.append(b); }
+function gridEst() {
+  const g = el('<div class="grid3"></div>');
+  ESTIRAMIENTOS.forEach((id, i) => g.append(el(`<div class="gst"><span class="nb sm2">${i + 1}</span><img src="${im(id)}" alt="" loading="lazy"><b>${ST[id].n}</b></div>`)));
+  return g;
+}
+function ficha(id) {
+  const e = LIB[id] || {};
+  hoja(`<h2 style="font-size:28px">${e.n || id}</h2><div class="small mut" style="margin-bottom:10px">${e.mus || e.m || ''}</div>
+    <div class="pair"><div><img src="${im(id, 0)}" alt=""><span>Inicial</span></div><div><img src="${im(id, 1)}" alt=""><span>Final</span></div></div>
+    ${e.pasos ? `<div class="sec">Cómo se hace</div><ol class="l">${e.pasos.map(p => `<li>${p}</li>`).join('')}</ol>` : ''}
+    ${e.err ? `<div class="sec">Errores típicos</div><ul class="l">${e.err.map(p => `<li>${p}</li>`).join('')}</ul>` : ''}
+    ${e.gem ? `<div class="card note" style="margin-top:12px">${e.gem}</div>` : ''}`);
+}
+
+// ---------- ENTRENAMIENTO ----------
+let restT = null;
+function nuevoDraft(ses, d) {
+  const S = SESIONES[ses], lig = suave(d);
+  return { k: key(d), ses, paso: 0, t0: Date.now(), cal: {}, cardio: false, est: false, lig,
+    ex: S.items.map(it => { const sg = sugerencia(it), n = lig ? Math.min(2, it.s) : it.s; return { id: it.id, feel: null, sets: Array.from({ length: n }, () => ({ kg: sg.kg, reps: sg.reps, ok: false })) }; }) };
+}
+function abrirEntreno(ses, d) {
+  if (!DB.draft || DB.draft.k !== key(d) || DB.draft.ses !== ses) { DB.draft = nuevoDraft(ses, d); save(); }
+  const D = DB.draft, S = SESIONES[ses];
+  const pasos = ['cal', ...S.items.map((_, i) => i), 'cardio', 'est'];
+  const ov = overlay(S.n, '', () => { pararDescanso(); despierto(false); render(); });
+  despierto(true);
+  const foot = el('<div class="foot"></div>'); ov.o.append(foot);
+  const dibujar = () => {
+    const p = pasos[D.paso]; const top = ov.bd.scrollTop; ov.bd.innerHTML = ''; foot.innerHTML = '';
+    $('span', ov.hd).textContent = `${S.dia} · paso ${D.paso + 1} de ${pasos.length}`;
+    const dots = el('<div class="dots"></div>');
+    pasos.forEach((q, i) => { const b = el(`<button class="${i === D.paso ? 'on' : ''} ${(typeof q === 'number' ? D.ex[q].sets.every(s => s.ok) : q === 'cardio' ? D.cardio : q === 'est' ? D.est : i < D.paso) ? 'ok' : ''}"></button>`); b.onclick = () => ir(i); dots.append(b); });
+    ov.bd.append(dots);
+    if (D.lig && D.paso === 0) ov.bd.append(el('<div class="card note small"><b>Semana suave:</b> mismo peso y 2 series por ejercicio. Toca recuperar.</div>'));
+    const sig = (txt, fn) => { const b = el(`<button class="big">${txt}</button>`); b.onclick = fn || (() => ir(D.paso + 1)); foot.append(b); return b; };
+    if (p === 'cal') {
+      ov.bd.append(el('<h2 style="font-size:30px;margin-bottom:8px">Calentamiento · 8 min</h2>'));
+      CALENTAMIENTO.forEach((c, i) => {
+        const r = el(`<button class="card btn ${D.cal[i] ? 'on ok' : ''}"><div class="exrow">${c.id ? `<img src="${im(c.id)}" alt="">` : '<div class="thumb ico">🔁</div>'}<div class="grow"><b>${c.n}</b><div class="small mut">${c.t}</div></div><span class="chk">${D.cal[i] ? '✓' : ''}</span></div></button>`);
+        r.onclick = () => { D.cal[i] = !D.cal[i]; save(); dibujar(); }; ov.bd.append(r);
+      });
+      sig('EMPEZAR FUERZA →');
+    } else if (typeof p === 'number') {
+      dibujarEj(ov.bd, S.items[p], D.ex[p], p, S.items.length, () => { dibujar(); });
+      sig(p === S.items.length - 1 ? 'IR A LA CINTA →' : 'SIGUIENTE EJERCICIO →');
+      ov.bd.scrollTop = top;
+    } else if (p === 'cardio') {
+      ov.bd.append(el(`<h2 style="font-size:30px">Cinta · ${CARDIO.min} min</h2>`));
+      ov.bd.append(el(`<div class="pair"><div><img src="${im(CARDIO.id, 0)}" alt=""><span>Inicial</span></div><div><img src="${im(CARDIO.id, 1)}" alt=""><span>En marcha</span></div></div>`));
+      ov.bd.append(el(`<div class="card small" style="margin-top:10px">${LIB[CARDIO.id].pasos.map(x => '• ' + x).join('<br>')}<div style="margin-top:8px;color:var(--warn)">${LIB[CARDIO.id].gem}</div></div>`));
+      ov.bd.append(reloj(CARDIO.min * 60, () => { D.cardio = true; save(); }));
+      const c = el(`<button class="card btn ${D.cardio ? 'on ok' : ''}"><div class="row"><span class="chk">${D.cardio ? '✓' : ''}</span><b>Cinta hecha</b></div></button>`);
+      c.onclick = () => { D.cardio = !D.cardio; save(); dibujar(); }; ov.bd.append(c);
+      sig('ESTIRAMIENTOS →');
+    } else if (p === 'est') {
+      ov.bd.append(el('<h2 style="font-size:30px">Estiramientos</h2>'));
+      ov.bd.append(el('<div class="small mut" style="margin-bottom:10px">12 estiramientos · 20-30 s cada uno · respira profundo</div>'));
+      ov.bd.append(gridEst());
+      const b = el(`<button class="big ${D.est ? 'ghost' : ''}" style="margin-top:12px">${D.est ? '✓ Hechos · repetir' : 'EMPEZAR ESTIRAMIENTOS GUIADOS'}</button>`);
+      b.onclick = () => estirar(() => { D.est = true; save(); dibujar(); }); ov.bd.append(b);
+      sig('TERMINAR SESIÓN ✓', () => terminar(ov));
+    }
+  };
+  const ir = i => { D.paso = Math.max(0, Math.min(pasos.length - 1, i)); save(); ov.bd.scrollTop = 0; dibujar(); ov.bd.scrollTop = 0; };
+  dibujar();
+}
+function dibujarEj(bd, it, x, i, n, redraw) {
+  const e = LIB[x.id] || {}, sg = sugerencia(Object.assign({}, it, { id: x.id })), conPeso = !it.seg && e.inc;
+  bd.append(el(`<div class="row" style="align-items:flex-start;margin-bottom:8px"><span class="nb">${i + 1}</span><div class="grow"><div class="lam-n" style="font-size:28px">${e.n}</div><div class="small mut">${e.mus || e.m || ''} · ejercicio ${i + 1} de ${n}</div></div><span class="sr">${presc(it, x.sets.length)}</span></div>`));
+  const pr = el(`<div class="pair"><div><img src="${im(x.id, 0)}" alt=""><span>Inicial</span></div><div><img src="${im(x.id, 1)}" alt=""><span>Final</span></div></div>`);
+  pr.onclick = () => ficha(x.id); bd.append(pr);
+  const lnk = el('<div class="row" style="gap:8px;margin:8px 0 12px"><button class="sm ghost">Cómo se hace</button><button class="sm ghost">Cambiar ejercicio</button></div>');
+  $$('button', lnk)[0].onclick = () => ficha(x.id);
+  $$('button', lnk)[1].onclick = () => cambiar(it, x, redraw);
+  bd.append(lnk);
+  const prev = DB.prog[x.id];
+  bd.append(el(`<div class="small" style="color:var(--accent);margin-bottom:8px">${it.seg ? `Objetivo: ${sg.reps} s` : !e.inc ? `Peso corporal · objetivo ${sg.reps} repeticiones` : sg.nuevo ? `Primera vez: empieza ligero, que te sobren 2-3 repeticiones` : `Te toca: ${num(prev.kg)} kg × ${sg.reps}`}${e.gem ? `<br><span style="color:var(--warn)">${e.gem}</span>` : ''}</div>`));
+  x.sets.forEach((s, j) => {
+    const r = el(`<div class="set ${s.ok ? 'ok' : ''}"><span class="n">${j + 1}</span>
+      ${conPeso ? `<div class="stp"><button data-a="k-">−</button><span>${num(+s.kg)}<small> kg</small></span><button data-a="k+">+</button></div>` : ''}
+      <div class="stp"><button data-a="r-">−</button><span>${s.reps}<small> ${it.seg ? 's' : 'rep'}</small></span><button data-a="r+">+</button></div>
+      <button class="go">✓</button></div>`);
+    $$('[data-a]', r).forEach(b => b.onclick = () => {
+      const a = b.dataset.a;
+      if (a === 'k-') s.kg = Math.max(0, +s.kg - (e.inc || 1)); if (a === 'k+') s.kg = +s.kg + (e.inc || 1);
+      if (a === 'r-') s.reps = Math.max(0, s.reps - (it.seg ? 5 : 1)); if (a === 'r+') s.reps = s.reps + (it.seg ? 5 : 1);
+      save(); redraw();
+    });
+    $('.go', r).onclick = () => {
+      s.ok = !s.ok;
+      if (s.ok) x.sets.slice(j + 1).forEach(q => { if (!q.ok) { q.kg = s.kg; q.reps = s.reps; } });
+      save(); redraw();
+      if (s.ok) empezarDescanso(it.d, x.sets.every(q => q.ok));
+    };
+    bd.append(r);
+  });
+  if (x.sets.every(s => s.ok)) {
+    bd.append(el('<div class="sec">¿Cómo ha ido?</div>'));
+    const f = el(`<div class="feel"><button data-f="facil" class="${x.feel === 'facil' ? 'on' : ''}">😌 Fácil<br><small class="mut">sobraban 4+</small></button><button data-f="bien" class="${x.feel === 'bien' ? 'on' : ''}">👍 Bien<br><small class="mut">sobraban 2-3</small></button><button data-f="duro" class="${x.feel === 'duro' ? 'on' : ''}">🥵 Duro<br><small class="mut">al límite</small></button></div>`);
+    $$('button', f).forEach(b => b.onclick = () => { x.feel = b.dataset.f; save(); redraw(); });
+    bd.append(f);
+  }
+}
+function cambiar(it, x, redraw) {
+  const e = LIB[it.id]; const alts = Object.keys(LIB).filter(k => k !== x.id && k !== it.id && LIB[k].p && LIB[k].p === e.p && LIB[k].lum !== false);
+  if (it.id !== x.id) alts.unshift(it.id);
+  const o = hoja(`<h2 style="font-size:26px">Cambiar por…</h2><div class="small mut" style="margin-bottom:10px">Si la máquina está ocupada o no te va bien</div><div id="alts"></div>`);
+  if (!alts.length) $('#alts', o).innerHTML = '<div class="mut">No hay otro equivalente en la lista.</div>';
+  alts.forEach(k => {
+    const b = el(`<button class="card btn"><div class="exrow"><img src="${im(k)}" alt=""><div class="grow"><b>${LIB[k].n}</b><div class="small mut">${LIB[k].mus || LIB[k].m}</div></div></div></button>`);
+    b.onclick = () => { const sg = sugerencia(Object.assign({}, it, { id: k })); x.id = k; x.feel = null; x.sets.forEach(s => { s.kg = sg.kg; s.reps = sg.reps; s.ok = false; }); save(); o.remove(); redraw(); };
+    $('#alts', o).append(b);
+  });
+}
+function empezarDescanso(seg, ultimo) {
+  pararDescanso();
+  let fin = Date.now() + seg * 1000;
+  const b = el(`<div class="rest"><div class="grow"><div class="small mut">${ultimo ? 'Descansa y pasa al siguiente' : 'Descanso'}</div><b>0:00</b></div><button class="sm ghost" data-a="mas">+15 s</button><button class="sm" data-a="fin">Listo</button></div>`);
+  document.body.append(b);
+  const tick = () => { const r = Math.max(0, Math.round((fin - Date.now()) / 1000)); $('b', b).textContent = `${Math.floor(r / 60)}:${pad(r % 60)}`; if (r <= 0) { pitido(); pararDescanso(); } };
+  $('[data-a=mas]', b).onclick = () => { fin += 15000; tick(); };
+  $('[data-a=fin]', b).onclick = () => pararDescanso();
+  restT = { b, i: setInterval(tick, 500) }; tick();
+}
+function pararDescanso() { if (restT) { clearInterval(restT.i); restT.b.remove(); restT = null; } }
+function reloj(seg, onFin) {
+  let rest = seg, t = null;
+  const c = el(`<div class="card" style="text-align:center;margin-top:10px"><div class="bebas" style="font-size:64px;color:var(--accent);line-height:1">0:00</div><div class="row" style="justify-content:center;gap:8px;margin-top:8px"><button class="sm">Empezar</button><button class="sm ghost">Reiniciar</button></div></div>`);
+  const pinta = () => { $('.bebas', c).textContent = `${Math.floor(rest / 60)}:${pad(rest % 60)}`; };
+  const [bS, bR] = $$('button', c);
+  bS.onclick = () => {
+    if (t) { clearInterval(t); t = null; bS.textContent = 'Seguir'; return; }
+    bS.textContent = 'Pausa';
+    t = setInterval(() => { if (!document.body.contains(c)) { clearInterval(t); return; } rest--; pinta(); if (rest <= 0) { clearInterval(t); t = null; pitido(); bS.textContent = 'Hecho ✓'; onFin && onFin(); } }, 1000);
+  };
+  bR.onclick = () => { if (t) clearInterval(t); t = null; rest = seg; bS.textContent = 'Empezar'; pinta(); };
+  pinta(); return c;
+}
+function terminar(ov) {
+  const D = DB.draft, S = SESIONES[D.ses];
+  const hechos = D.ex.filter(x => x.sets.some(s => s.ok));
+  if (!hechos.length && !confirm('No has marcado ninguna serie. ¿Terminar igualmente?')) return;
+  const msgs = []; let vol = 0;
+  D.ex.forEach((x, i) => { const m = progresar(S.items[i], x); if (m) msgs.push([x.id, m]); x.sets.filter(s => s.ok).forEach(s => vol += (+s.kg || 0) * (+s.reps || 0) * (S.items[i].uni ? 2 : 1)); });
+  const min = Math.round((Date.now() - D.t0) / 60000);
+  DB.logs = DB.logs.filter(l => !(l.f === D.k && l.ses === D.ses));
+  DB.logs.push({ f: D.k, ses: D.ses, min, vol: Math.round(vol), msgs, ex: D.ex.map(x => ({ id: x.id, feel: x.feel, sets: x.sets.filter(s => s.ok).map(s => ({ kg: +s.kg, reps: +s.reps })) })) });
+  DB.hecho[D.k] = { gym: true, cardio: D.cardio, est: D.est };
+  DB.draft = null; save(); pararDescanso(); despierto(false);
+  ov.o.remove(); verResumenDia(D.k, true);
+}
+function verResumenDia(k, recien) {
+  const l = DB.logs.filter(x => x.f === k).pop(); if (!l) return;
+  const S = SESIONES[l.ses] || { n: l.ses }, h = DB.hecho[k] || {};
+  const ov = overlay(recien ? '¡Sesión hecha!' : S.n, fmt(parse(k)), render);
+  ov.bd.innerHTML = `<div class="hero" style="text-align:center"><div class="cnt" style="font-size:56px">${num(l.vol / 1000)} t</div><div class="lbl">kilos movidos · ${l.min} min</div>
+    <div class="small mut" style="margin-top:8px">${h.cardio ? '✅' : '◻️'} Cinta · ${h.est ? '✅' : '◻️'} Estiramientos</div></div>
+    <div class="sec">Para la próxima vez</div>${l.msgs.map(([id, m]) => `<div class="card"><div class="exrow"><img src="${im(id)}" alt=""><div class="grow"><b>${LIB[id] ? LIB[id].n : id}</b><div class="small" style="color:var(--accent)">${m}</div></div></div></div>`).join('')}`;
+}
+
+// ---------- ESTIRAMIENTOS GUIADOS ----------
+function estirar(onDone) {
+  const pasos = []; ESTIRAMIENTOS.forEach(id => { if (ST[id].lados) { pasos.push([id, 1]); pasos.push([id, 2]); } else pasos.push([id, 0]); });
+  let i = 0, t = null, rest = 0;
+  const ov = overlay('Estiramientos', '12 estiramientos guiados', () => { clearInterval(t); if (!onDone) render(); });
+  const foot = el('<div class="foot"></div>'); ov.o.append(foot);
+  const pinta = () => {
+    clearInterval(t); t = null;
+    const [id, lado] = pasos[i], s = ST[id]; rest = s.s;
+    ov.bd.innerHTML = `<div class="small mut">${i + 1} de ${pasos.length}</div><div class="bar" style="margin:6px 0 12px"><i style="width:${(i + 1) / pasos.length * 100}%"></i></div>
+      <h2 style="font-size:34px">${s.n}${lado ? ` · lado ${lado}` : ''}</h2>
+      <div class="pair"><div><img src="${im(id, 0)}" alt=""></div><div><img src="${im(id, 1)}" alt=""></div></div>
+      <div class="card" style="margin-top:10px">${s.t}</div>
+      <div style="text-align:center"><div class="bebas" id="cr" style="font-size:80px;color:var(--accent);line-height:1">${rest}</div><div class="small mut">segundos</div></div>`;
+    foot.innerHTML = '';
+    const go = el('<button class="big">EMPEZAR</button>');
+    go.onclick = () => {
+      if (t) return; go.textContent = 'Aguanta…';
+      t = setInterval(() => { rest--; const c = $('#cr', ov.bd); if (c) c.textContent = rest; if (rest <= 0) { clearInterval(t); t = null; pitido(); siguiente(); } }, 1000);
+    };
+    const row = el('<div class="two" style="margin-top:8px"><button class="big ghost">‹ Anterior</button><button class="big ghost">Saltar ›</button></div>');
+    $$('button', row)[0].onclick = () => { if (i > 0) { i--; pinta(); } };
+    $$('button', row)[1].onclick = siguiente;
+    foot.append(go, row);
+  };
+  const siguiente = () => { if (i < pasos.length - 1) { i++; pinta(); } else { clearInterval(t); toast('¡Estiramientos hechos!'); ov.o.remove(); onDone ? onDone() : render(); } };
+  pinta();
+}
+
+// ---------- SALIDAS ----------
+function apuntarSalida(d, it) {
+  const s = DB.salidas[key(d)] || {};
+  const o = hoja(`<h2 style="font-size:28px">${TIPO[it.tipo][0]} ${TIPO[it.tipo][1]} · ${fmt(d)}</h2><div class="small mut" style="margin-bottom:12px">${esc(it.t)}</div>
+    <div class="two"><div class="fld"><label>Kilómetros</label><input id="km" inputmode="decimal" value="${esc(s.km || '')}"></div><div class="fld"><label>Desnivel (m)</label><input id="des" inputmode="numeric" value="${esc(s.des || '')}"></div></div>
+    <div class="two"><div class="fld"><label>Horas</label><input id="hh" inputmode="numeric" value="${s.h ? Math.floor(s.h) : ''}"></div><div class="fld"><label>Minutos</label><input id="mm" inputmode="numeric" value="${s.h ? Math.round((s.h % 1) * 60) : ''}"></div></div>
+    <div class="fld"><label>Sensaciones</label><div class="chips" id="sen">${['Muy bien', 'Normal', 'Cansado'].map(x => `<button class="chip ${s.sen === x ? 'on' : ''}">${x}</button>`).join('')}</div></div>
+    <div class="fld"><label>Gemelo izquierdo</label><div class="chips" id="gem">${['Bien', 'Algo cargado', 'Molesta'].map(x => `<button class="chip ${s.gem === x ? 'on' : ''}">${x}</button>`).join('')}</div></div>
+    <div class="fld"><label>Notas (comida, terreno…)</label><input id="not" value="${esc(s.notas || '')}"></div>
+    <button class="big" id="ok">Guardar</button>${DB.salidas[key(d)] ? '<button class="big ghost" id="del" style="margin-top:8px">Borrar</button>' : ''}`);
+  ['sen', 'gem'].forEach(g => $$(`#${g} button`, o).forEach(b => b.onclick = () => { $$(`#${g} button`, o).forEach(x => x.classList.remove('on')); b.classList.add('on'); }));
+  $('#ok', o).onclick = () => {
+    const v = id => ($('#' + id, o).value || '').replace(',', '.');
+    const h = (+v('hh') || 0) + (+v('mm') || 0) / 60;
+    DB.salidas[key(d)] = { tipo: it.tipo, km: v('km'), des: v('des'), h: Math.round(h * 100) / 100, sen: ($('#sen .on', o) || {}).textContent || '', gem: ($('#gem .on', o) || {}).textContent || '', notas: $('#not', o).value };
+    save(); o.remove(); toast('Salida guardada'); render();
+  };
+  const del = $('#del', o); if (del) del.onclick = () => { delete DB.salidas[key(d)]; save(); o.remove(); render(); };
 }
 
 // ---------- CHEQUEO SEMANAL ----------
+function chequeoPendiente() { const t = today(); return semana(t) >= 2 && !DB.chequeo[wkey(t)]; }
 function abrirChequeo() {
-  const o = overlay('Chequeo de la semana', 'Con esto ajusto series y calorías', () => render());
-  const resp = {}; const OP = [[1, 'Fresco'], [2, 'Normal'], [3, 'Cargado'], [4, 'Molestia']];
-  o.body.innerHTML = `<p class="mut">¿Cómo tienes cada zona después de esta semana (gimnasio + salidas)?</p>`;
-  MUSCULOS.forEach(m => {
-    const r = el(`<div class="card"><b>${m}</b><div class="row seg">${OP.map(([v, t]) => `<button class="btn ghost sm" data-v="${v}">${t}</button>`).join('')}</div></div>`);
-    r.querySelectorAll('button').forEach(b => b.onclick = () => { resp[m] = +b.dataset.v; r.querySelectorAll('button').forEach(x => x.classList.toggle('sel', x === b)); });
-    o.body.append(r);
-  });
-  o.body.append(el(`<label class="lab">Tu peso de hoy (en ayunas)<input id="cpeso" type="number" inputmode="decimal" step="0.1" placeholder="${num(pesoActual())}"></label>`));
-  const b = el('<button class="btn big wide">Guardar chequeo</button>');
-  b.onclick = () => {
-    const pk = parseFloat(String(o.body.querySelector('#cpeso').value).replace(',', '.')) || null;
-    const msgs = aplicarChequeo(resp, pk);
-    o.body.innerHTML = `<h3>Ajustes de esta semana</h3>${msgs.length ? msgs.map(x => `<div class="card">${x}</div>`).join('') : '<div class="card">Todo en orden: el plan sigue igual.</div>'}`;
-    const ok = el('<button class="btn big wide">Vale</button>'); ok.onclick = () => o.close(); o.body.append(ok);
+  const Q = [['energia', 'Energía esta semana', ['😃 Bien', '😐 Normal', '🥱 Cansado']], ['piernas', 'Piernas', ['Frescas', 'Normales', 'Cargadas']],
+    ['lumbar', 'Lumbar', ['Bien', 'Algo', 'Molesta']], ['gemelo', 'Gemelo izquierdo', ['Bien', 'Algo', 'Molesta']]];
+  const o = hoja(`<h2 style="font-size:28px">Chequeo de la semana</h2><div class="small mut" style="margin-bottom:12px">Con esto ajusto la semana</div>
+    ${Q.map(([k, t, ops]) => `<div class="fld"><label>${t}</label><div class="chips" data-k="${k}">${ops.map((x, i) => `<button class="chip" data-v="${i + 1}">${x}</button>`).join('')}</div></div>`).join('')}
+    <div class="fld"><label>Peso de hoy (kg, en ayunas)</label><input id="pk" inputmode="decimal" placeholder="${num(pesoActual())}"></div><button class="big" id="ok">Guardar</button>`);
+  $$('.chips', o).forEach(g => $$('button', g).forEach(b => b.onclick = () => { $$('button', g).forEach(x => x.classList.remove('on')); b.classList.add('on'); }));
+  $('#ok', o).onclick = () => {
+    const r = {}; $$('.chips', o).forEach(g => { const b = $('.on', g); r[g.dataset.k] = b ? +b.dataset.v : 1; });
+    const msgs = []; let lig = false;
+    if (r.lumbar === 3) { lig = true; msgs.push('Lumbar molesta: semana suave. Baja peso en la sentadilla y, si duele, cámbiala por prensa o goblet.'); }
+    if (r.gemelo === 3) { lig = true; msgs.push('Gemelo molesto: sáltate la elevación de gemelo y en la cinta anda, no trotes.'); }
+    if (r.energia === 3 && r.piernas === 3) { lig = true; msgs.push('Cansado y con piernas cargadas: semana suave, 2 series por ejercicio.'); }
+    else if (r.piernas === 3) msgs.push('Piernas cargadas: la salida del finde, al tiempo marcado pero muy suave.');
+    if (r.lumbar === 2 || r.gemelo === 2) msgs.push('Algo de molestia: sigue el plan sin subir peso en lo que la cargue.');
+    const pk = +($('#pk', o).value || '').replace(',', '.');
+    if (pk > 30) {
+      const ant = DB.pesos.slice().sort((a, b) => a.f < b.f ? -1 : 1).filter(p => parse(p.f) <= addD(today(), -5)).pop();
+      DB.pesos = DB.pesos.filter(p => p.f !== key(today())); DB.pesos.push({ f: key(today()), kg: pk });
+      if (ant && pk > PERFIL.pesoObj) {
+        const baja = (ant.kg - pk) / Math.max(1, dias(parse(ant.f), today()) / 7);
+        if (baja < 0.2 && (DB.ajuste || 0) > -400) { DB.ajuste = (DB.ajuste || 0) - 100; msgs.push(`Bajas ${num(baja)} kg/semana: quito 100 kcal al día.`); }
+        else if (baja > 0.9) { DB.ajuste = (DB.ajuste || 0) + 150; msgs.push(`Bajas ${num(baja)} kg/semana, demasiado rápido: sumo 150 kcal para no perder fuerza.`); }
+        else msgs.push(`Bajas ${num(baja)} kg/semana: vas bien.`);
+      }
+    }
+    if (!msgs.length) msgs.push('Todo en orden: sigue el plan tal cual.');
+    DB.chequeo[wkey(today())] = { r, suave: lig, msgs }; save(); o.remove();
+    const h = hoja(`<h2 style="font-size:28px">Esta semana</h2>${msgs.map(x => `<div class="card note">${x}</div>`).join('')}<button class="big" id="okk">Entendido</button>`);
+    $('#okk', h).onclick = () => h.remove();
+    render();
   };
-  o.body.append(b);
 }
 
-// ---------- PLAN ----------
-function vPlan(m) {
-  const P = DB.perfil; const lm = addD(monday(today()), planWk * 7);
-  m.append(el('<h2>Plan</h2>'));
-  const f = P.finde ? fase(lm) : null; const w = P.finde ? semanaBici(lm) : null;
-  const nav = el(`<div class="wnav"><button class="btn ghost sm">‹</button><div><b>Semana del ${fmt(lm)}</b><span>${w >= 1 && w <= 25 ? `Semana ${w} de 25${f ? ' · ' + f.n : ''}` : ''}${descarga(lm) ? ' · descarga' : ''}</span></div><button class="btn ghost sm">›</button></div>`);
-  const [bp, bn] = nav.querySelectorAll('button'); bp.onclick = () => { planWk--; render(); }; bn.onclick = () => { planWk++; render(); };
-  m.append(nav);
-  if (f) m.append(el(`<div class="card note" style="border-left-color:${f.c}"><b style="color:${f.c}">${f.n}</b><p>${f.t}</p></div>`));
-  for (let i = 0; i < 7; i++) m.append(tarjetaDia(addD(lm, i), false));
-  if (planWk) { const b = el('<button class="btn ghost wide">Volver a esta semana</button>'); b.onclick = () => { planWk = 0; render(); }; m.append(b); }
-  m.append(el('<h3>Tus sesiones</h3>'));
-  DB.plan.sesiones.forEach(s => { const c = el(`<button class="card item gym"><span class="ic">🏋️</span><span class="tx"><b>${s.n}</b><span>${s.items.map((x, i) => LIB[ejDe(s, i)].n).join(' · ')}</span></span><span class="st">›</span></button>`); c.onclick = () => verSesion(s); m.append(c); });
-  const lb = el('<button class="btn ghost wide">📚 Biblioteca de ejercicios</button>'); lb.onclick = biblioteca; m.append(lb);
-  const es = el('<button class="btn ghost wide">🧘 Estiramientos con fotos</button>'); es.onclick = verEstiramientos; m.append(es);
+// ---------- CAMINO A MONEGROS ----------
+function vCamino(m) {
+  const t = today(), wNow = semana(t), N = 25;
+  const sal = Object.values(DB.salidas), kmTot = sal.reduce((a, s) => a + (+s.km || 0), 0), hTot = sal.reduce((a, s) => a + (+s.h || 0), 0);
+  m.append(el(`<div class="top"><h1>Camino a Monegros</h1><span class="mut small">24 abr 2027</span></div>`));
+  m.append(el(`<div class="stats"><div><b>${Math.max(0, Math.min(N, wNow))}</b><span>de 25 semanas</span></div><div><b>${Object.values(DB.hecho).filter(h => h.gym).length}</b><span>gimnasio</span></div><div><b>${num(kmTot, 0)}</b><span>km en bici</span></div><div><b>${num(hTot, 0)}</b><span>horas fuera</span></div></div>`));
+  const W = 360, step = 92, H = N * step + 150, pts = [];
+  for (let w = 1; w <= N; w++) pts.push([W / 2 + Math.sin(w * 0.85) * 105, H - 60 - (w - 1) * step]);
+  let d = `M${pts[0][0]},${pts[0][1] + 60} L${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) { const [x0, y0] = pts[i], [x1, y1] = pts[i + 1], my = (y0 + y1) / 2; d += ` C${x0},${my} ${x1},${my} ${x1},${y1}`; }
+  d += ` L${pts[N - 1][0]},40`;
+  let mont = '';
+  for (let i = 0; i < 16; i++) { const y = 120 + i * (H - 200) / 16, x = i % 2 ? 22 : W - 22, s = 26 + (i * 7) % 18; mont += `<path d="M${x - s},${y + s} L${x},${y - s * .4} L${x + s},${y + s}Z" fill="#1a2714"/>`; }
+  let nodes = '', fasesL = '';
+  FASES.filter(f => f.de <= N).forEach(f => { const [x, y] = pts[f.de - 1]; const left = x > W / 2; fasesL += `<text x="${left ? x - 34 : x + 34}" y="${y + 6}" text-anchor="${left ? 'end' : 'start'}" fill="${f.c}" font-family="Bebas Neue" font-size="20" letter-spacing="1">${f.n.toUpperCase()}</text>`; });
+  pts.forEach(([x, y], i) => {
+    const w = i + 1, lun = addD(START, (w - 1) * 7), st = statsSemana(lun), f = fase(w), cur = w === wNow, past = w < wNow;
+    const fill = st.frac >= 1 ? f.c : past || cur ? '#162013' : '#0E1209', r = cur ? 23 : 17;
+    const arc = st.frac > 0 && st.frac < 1 ? `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${f.c}" stroke-width="4" stroke-dasharray="${(2 * Math.PI * r * st.frac).toFixed(1)} 999" transform="rotate(-90 ${x} ${y})"/>` : '';
+    nodes += `<g class="wk" data-w="${w}">${cur ? `<circle cx="${x}" cy="${y}" r="${r + 8}" fill="none" stroke="${f.c}" stroke-width="2" class="pulse"/>` : ''}
+      <circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${past || cur || st.frac ? f.c : '#26361D'}" stroke-width="2"/>${arc}
+      <text x="${x}" y="${y + 6}" text-anchor="middle" font-family="Bebas Neue" font-size="${cur ? 22 : 18}" fill="${st.frac >= 1 ? '#0E1209' : '#F2F5EC'}">${w}</text>
+      ${descarga(w) ? `<text x="${x + r + 2}" y="${y - r + 8}" font-size="14">😴</text>` : ''}
+      ${cur ? `<text x="${x}" y="${y - r - 12}" text-anchor="middle" font-size="26">🚵</text>` : ''}</g>`;
+  });
+  const svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${mont}
+    <path d="${d}" fill="none" stroke="#26361D" stroke-width="30" stroke-linecap="round"/><path d="${d}" fill="none" stroke="#3b5229" stroke-width="2" stroke-dasharray="10 12"/>
+    <text x="${pts[N - 1][0]}" y="34" text-anchor="middle" font-size="34">🏁</text><text x="${pts[N - 1][0] + 26}" y="30" font-family="Bebas Neue" font-size="22" fill="#C8A84A">MONEGROS</text>
+    <text x="${pts[0][0]}" y="${H - 8}" text-anchor="middle" font-family="Bebas Neue" font-size="16" fill="#8A9C7C">SALIDA · 2 NOV</text>
+    ${fasesL}${nodes}</svg>`;
+  const road = el(`<div class="road">${svg}</div>`); m.append(road);
+  $$('.wk', road).forEach(g => g.onclick = () => verSemana(+g.dataset.w));
+  const cur = $(`.wk[data-w="${Math.max(1, Math.min(N, wNow))}"]`, road);
+  setTimeout(() => cur && cur.scrollIntoView({ block: 'center' }), 60);
 }
-function biblioteca() {
-  const o = overlay('Biblioteca', `${Object.keys(LIB).length} ejercicios y ${Object.keys(ST).length} estiramientos`);
-  const q = el('<input class="search" placeholder="Buscar…">'); o.body.append(q); const box = el('<div></div>'); o.body.append(box);
-  const pint = () => {
-    const t = q.value.toLowerCase(); box.innerHTML = '';
-    [...MUSCULOS, 'Gemelo', 'Cardio', 'Estiramientos'].forEach(g => {
-      const ids = g === 'Estiramientos' ? Object.keys(ST).filter(id => ST[id].n.toLowerCase().includes(t)) : Object.keys(LIB).filter(id => LIB[id].m === g && LIB[id].n.toLowerCase().includes(t));
-      if (!ids.length) return; box.append(el(`<h4>${g}</h4>`));
-      ids.forEach(id => { const e = LIB[id] || ST[id]; const b = el(`<button class="card exrow"><img src="${img(id)}" alt="" loading="lazy"><span class="tx"><b>${e.n}</b><span>${LIB[id] ? PATRON_N[e.p] : `${e.s} s`}</span></span><span class="st">›</span></button>`); b.onclick = () => ficha(id); box.append(b); });
+function verSemana(w) {
+  const lun = addD(START, (w - 1) * 7), f = fase(w), st = statsSemana(lun);
+  let h = `<span class="pill" style="--c:${f.c}">${f.n}${descarga(w) ? ' · descarga' : ''}</span><h2 style="font-size:32px;margin-top:6px">Semana ${w}</h2><div class="small mut">${fmt(lun)} – ${fmt(addD(lun, 6))} · ${st.h} de ${st.p} hechos</div><div class="small" style="margin:8px 0 12px">${f.t}</div>`;
+  for (let i = 0; i < 7; i++) {
+    const d = addD(lun, i);
+    itemsDia(d).forEach(it => {
+      const ok = hechoItem(d, it);
+      const tx = it.k === 'gym' ? `🏋️ ${SESIONES[it.ses].n}` : it.k === 'out' ? `${TIPO[it.tipo][0]} ${TIPO[it.tipo][1]} ${horas(it.h)} · <span class="mut">${esc(it.t)}</span>` : `🏁 ${it.t}`;
+      h += `<div class="card ${ok ? 'ok' : ''}" style="padding:10px 12px"><div class="row"><b style="width:28px">${DC[i]}</b><div class="grow small">${tx}</div>${ok ? '✅' : ''}</div></div>`;
     });
-  };
-  q.oninput = pint; pint();
+  }
+  hoja(h);
 }
 
-// ---------- COMIDA ----------
-let recTipo = 'Todas';
-function vComida(m) {
-  const N = nutri(); const P = DB.perfil; const ex = extraDia(today());
-  m.append(el('<h2>Comida</h2>'));
-  const tot = N.p * 4 + N.c * 4 + N.g * 9;
-  m.append(el(`<div class="card"><div class="kcal"><b>${N.kcal}</b><span>kcal al día</span></div>
-    <div class="macro"><span style="flex:${N.p * 4 / tot};background:#38bdf8"></span><span style="flex:${N.c * 4 / tot};background:#f97316"></span><span style="flex:${N.g * 9 / tot};background:#eab308"></span></div>
-    <div class="mrow"><div><b>${N.p} g</b><span>Proteína</span></div><div><b>${N.c} g</b><span>Hidratos</span></div><div><b>${N.g} g</b><span>Grasa</span></div></div>
-    <p class="mut">${P.objetivo === 'bajar' && N.def > 0 ? `Para bajar unos ${num(Math.min(P.ritmo, 0.75))} kg/semana.` : P.objetivo === 'musculo' ? 'Con un pequeño superávit para ganar músculo.' : 'Mantenimiento.'} Se recalcula cada semana con tu peso.${DB.nut.ajuste ? ` Ajuste acumulado: ${DB.nut.ajuste > 0 ? '+' : ''}${DB.nut.ajuste} kcal.` : ''}</p></div>`));
-  if (ex) m.append(el(`<div class="card gem"><b>Hoy hay salida: +${ex.kcal} kcal</b> (unos ${ex.c} g más de hidrato).<p>${ex.t}</p></div>`));
-  m.append(el(`<div class="card sug"><b>Reglas de la casa</b><ul><li>Recorta entre semana, no en los días de salida.</li><li>Proteína en cada comida (unos ${Math.round(N.p / 4)} g).</li><li>Pésate 1 vez por semana, mismo día, en ayunas: va en el chequeo semanal.</li></ul></div>`));
-  m.append(el('<h3>Peso</h3>'));
-  const ps = DB.pesos.slice().sort((a, b) => a.f < b.f ? -1 : 1);
-  const g = el(`<div class="card">${ps.length > 1 ? linea(ps.map(p => ({ x: +parse(p.f), y: p.kg })), P.objetivo === 'bajar' ? P.pesoObj : null, 'kg') : '<p class="mut">Cuando tengas dos pesadas verás aquí la gráfica.</p>'}
-    <div class="row"><input id="npeso" type="number" inputmode="decimal" step="0.1" placeholder="Peso de hoy"><button class="btn sm">Apuntar</button></div>
-    <p class="mut">Ahora ${num(pesoActual())} kg${P.objetivo === 'bajar' ? ` · objetivo ${num(P.pesoObj)} kg` : ''}</p></div>`);
-  g.querySelector('button').onclick = () => { const v = parseFloat(String(g.querySelector('input').value).replace(',', '.')); if (!v) return toast('Pon el peso'); DB.pesos = DB.pesos.filter(p => p.f !== key(today())); DB.pesos.push({ f: key(today()), kg: v }); save(); render(); };
-  m.append(g);
-  m.append(el('<h3>Recetas</h3>'));
-  const tipos = ['Todas', ...new Set(RECETAS.map(r => r.tipo))];
-  const ch = el(`<div class="chips">${tipos.map(t => `<button class="${t === recTipo ? 'on' : ''}">${t}</button>`).join('')}</div>`);
-  ch.querySelectorAll('button').forEach(b => b.onclick = () => { recTipo = b.textContent; render(); }); m.append(ch);
-  RECETAS.filter(r => recTipo === 'Todas' || r.tipo === recTipo).forEach(r => {
-    const c = el(`<button class="card item"><span class="ic">${{ Desayuno: '🥣', Comida: '🍲', Cena: '🥗', Recena: '🥛', Salida: '🥪' }[r.tipo]}</span><span class="tx"><b>${r.n}</b><span>${r.kcal} kcal · P ${r.p} · H ${r.c} · G ${r.g}</span></span><span class="st">›</span></button>`);
-    c.onclick = () => { const o = overlay(r.n, `${r.tipo} · valores aproximados`); o.body.innerHTML = `<div class="mrow card"><div><b>${r.kcal}</b><span>kcal</span></div><div><b>${r.p} g</b><span>Proteína</span></div><div><b>${r.c} g</b><span>Hidratos</span></div><div><b>${r.g} g</b><span>Grasa</span></div></div><h4>Ingredientes</h4><p>${r.ing}</p><h4>Cómo</h4><p>${r.t}</p>`; };
-    m.append(c);
-  });
+// ---------- COMER ----------
+function vComer(m) {
+  m.append(el('<div class="top"><h1>Comer</h1></div>'));
+  const sg = el(`<div class="seg"><button class="${comSel === 'rec' ? 'on' : ''}">🍳 Recetas</button><button class="${comSel === 'com' ? 'on' : ''}">🛒 Lista de la compra</button></div>`);
+  $$('button', sg).forEach((b, i) => b.onclick = () => { comSel = i ? 'com' : 'rec'; render(); }); m.append(sg);
+  if (comSel === 'rec') {
+    const n = nutri(), sal = salidaDe(today());
+    m.append(el(`<div class="card"><div class="sec" style="margin-top:0">Objetivo de hoy</div><div class="macro"><div><b>${n.kcal}</b><span>kcal</span></div><div><b>${n.p}</b><span>prot g</span></div><div><b>${n.c}</b><span>hidr g</span></div><div><b>${n.g}</b><span>grasa g</span></div></div>
+      <div class="small mut" style="margin-top:10px">${sesionDe(today()) ? 'Día de gimnasio en ayunas: el desayuno de después, con proteína (yogur griego, huevos o pavo).' : 'Reparte la proteína entre las comidas.'}${sal && sal.h >= 2 ? ' Salida larga: suma hidratos y come algo cada hora (plátano, dátiles, bocadillo).' : ''}</div></div>`));
+    const EM = { Desayuno: '🍳', Comida: '🍽️', Cena: '🌙', Recena: '🥛', Salida: '🚵' };
+    [...new Set(RECETAS.map(r => r.tipo))].forEach(tipo => {
+      m.append(el(`<div class="sec">${tipo}</div>`));
+      RECETAS.filter(r => r.tipo === tipo).forEach(r => {
+        const hecha = !!DB.recetas[r.n];
+        const c = el(`<div class="rcard"><button class="rtop"><span class="remoji">${EM[tipo] || '🍴'}</span><div class="grow"><div class="rname">${r.n}</div><div class="rmeta"><span class="tag">${r.kcal} kcal</span><span class="tag">${r.p} g prot</span>${hecha ? '<span class="tag" style="color:var(--accent);border-color:var(--accent)">✓ hecha</span>' : ''}</div></div><span class="rchev">▾</span></button>
+          <div class="rbody"><div><div class="sec" style="margin:0 0 4px">Ingredientes</div><div class="small">${r.ing}</div></div><div><div class="sec" style="margin:0 0 4px">Cómo</div><div class="small">${r.t}</div></div>
+          <div class="small mut">Hidratos ${r.c} g · grasa ${r.g} g</div><button class="rbtn ${hecha ? 'on' : ''}">${hecha ? '✓ Hecha' : 'Marcar como hecha'}</button></div></div>`);
+        $('.rtop', c).onclick = () => c.classList.toggle('open');
+        $('.rbtn', c).onclick = () => {
+          if (DB.recetas[r.n]) delete DB.recetas[r.n]; else DB.recetas[r.n] = key(today()); save();
+          const on = !!DB.recetas[r.n]; const b = $('.rbtn', c); b.classList.toggle('on', on); b.textContent = on ? '✓ Hecha' : 'Marcar como hecha';
+          const meta = $('.rmeta', c); const tg = $('.tag[style]', meta); if (on && !tg) meta.append(el('<span class="tag" style="color:var(--accent);border-color:var(--accent)">✓ hecha</span>')); if (!on && tg) tg.remove();
+        };
+        m.append(c);
+      });
+    });
+  } else {
+    COMPRA.forEach(cat => {
+      const hechos = cat.items.filter(([n]) => DB.compra[n]).length;
+      const c = el(`<div class="ccat cc-${cat.k}"><div class="chdr"><span>${cat.e} ${cat.n}</span><span>${hechos}/${cat.items.length}</span></div></div>`);
+      cat.items.forEach(([n, q]) => {
+        const b = el(`<button class="citem ${DB.compra[n] ? 'on' : ''}"><span class="chk ${DB.compra[n] ? 'on' : ''}">${DB.compra[n] ? '✓' : ''}</span><div class="grow tx">${n}</div><span class="small mut">${q}</span></button>`);
+        b.onclick = () => { DB.compra[n] = !DB.compra[n]; save(); render(); }; c.append(b);
+      });
+      m.append(c);
+    });
+    const r = el('<button class="big ghost">Vaciar la lista (nueva compra)</button>'); r.onclick = () => { DB.compra = {}; save(); render(); }; m.append(r);
+  }
 }
 
 // ---------- PROGRESO ----------
+let proSel = null;
+function grafica(pts, obj, u) {
+  if (pts.length < 1) return '<div class="card mut small">Aún no hay datos.</div>';
+  const W = 340, H = 170, P = 30; const ys = pts.map(p => p.y).concat(obj != null ? [obj] : []);
+  let lo = Math.min(...ys), hi = Math.max(...ys); if (hi - lo < 1) { hi += 1; lo -= 1; }
+  const X = i => P + (pts.length === 1 ? (W - 2 * P) / 2 : i * (W - 2 * P) / (pts.length - 1)), Y = v => H - P + 8 - (v - lo) / (hi - lo) * (H - 2 * P);
+  const line = pts.map((p, i) => `${X(i)},${Y(p.y)}`).join(' ');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}">${obj != null ? `<line x1="${P}" x2="${W - 10}" y1="${Y(obj)}" y2="${Y(obj)}" stroke="#C8A84A" stroke-dasharray="5 5"/><text x="${W - 12}" y="${Y(obj) - 5}" text-anchor="end" fill="#C8A84A" font-size="11">objetivo ${num(obj)}</text>` : ''}
+    <polyline points="${line}" fill="none" stroke="#8CBF5A" stroke-width="3"/>${pts.map((p, i) => `<circle cx="${X(i)}" cy="${Y(p.y)}" r="4" fill="#8CBF5A"/>`).join('')}
+    <text x="4" y="${Y(hi) + 4}" fill="#8A9C7C" font-size="11">${num(hi)}</text><text x="4" y="${Y(lo) + 4}" fill="#8A9C7C" font-size="11">${num(lo)}</text>
+    <text x="${P}" y="${H - 4}" fill="#8A9C7C" font-size="11">${pts[0].x}</text><text x="${W - 10}" y="${H - 4}" text-anchor="end" fill="#8A9C7C" font-size="11">${pts[pts.length - 1].x}${u ? ' · ' + u : ''}</text></svg>`;
+}
 function vProgreso(m) {
-  m.append(el('<h2>Progreso</h2>'));
-  const gym = DB.logs.filter(l => !l.cardio);
-  const lm = monday(today());
-  const estaVol = gym.filter(l => wkey(parse(l.fecha)) === key(lm)).reduce((a, l) => a + l.vol, 0);
-  let racha = 0; for (let i = 1; i < 60; i++) { const wk = key(addD(lm, -7 * i)); if (DB.logs.some(l => wkey(parse(l.fecha)) === wk)) racha++; else break; }
-  if (DB.logs.some(l => wkey(parse(l.fecha)) === key(lm))) racha++;
-  const horas = Object.entries(DB.salidas).filter(([f]) => wkey(parse(f)) === key(lm)).reduce((a, [, s]) => a + s.min, 0);
-  m.append(el(`<div class="stats"><div><b>${gym.length}</b><span>entrenos</span></div><div><b>${racha}</b><span>semanas seguidas</span></div><div><b>${num(estaVol / 1000)}</b><span>t esta semana</span></div><div><b>${num(horas / 60)}</b><span>horas fuera esta semana</span></div></div>`));
-  const labs = [], vals = []; for (let i = 7; i >= 0; i--) { const d = addD(lm, -7 * i); labs.push(`${d.getDate()}/${d.getMonth() + 1}`); vals.push(gym.filter(l => wkey(parse(l.fecha)) === key(d)).reduce((a, l) => a + l.vol, 0) / 1000); }
-  m.append(el(`<div class="card"><b>Toneladas movidas por semana</b>${barras(vals, labs)}</div>`));
-  const sv = [], sl = []; for (let i = 7; i >= 0; i--) { const d = addD(lm, -7 * i); sl.push(`${d.getDate()}/${d.getMonth() + 1}`); sv.push(Object.entries(DB.salidas).filter(([f]) => wkey(parse(f)) === key(d)).reduce((a, [, s]) => a + s.min, 0) / 60); }
-  if (DB.perfil.finde) m.append(el(`<div class="card"><b>Horas de bici y monte por semana</b>${barras(sv, sl, '#38bdf8')}</div>`));
+  m.append(el('<div class="top"><h1>Progreso</h1></div>'));
   const ps = DB.pesos.slice().sort((a, b) => a.f < b.f ? -1 : 1);
-  if (ps.length > 1) m.append(el(`<div class="card"><b>Peso</b>${linea(ps.map(p => ({ x: +parse(p.f), y: p.kg })), DB.perfil.objetivo === 'bajar' ? DB.perfil.pesoObj : null, 'kg')}</div>`));
-  const recs = Object.entries(DB.prog).filter(([id, s]) => LIB[id] && LIB[id].inc && s.best).sort((a, b) => b[1].best - a[1].best);
-  if (recs.length) {
-    m.append(el('<h3>Tus marcas</h3>'));
-    recs.forEach(([id, s]) => { const c = el(`<button class="card exrow"><img src="${img(id)}" alt=""><span class="tx"><b>${LIB[id].n}</b><span>Trabajas con ${num(s.kg)} kg · máx. estimado ${num(s.best)} kg</span></span><span class="st">›</span></button>`); c.onclick = () => ficha(id); m.append(c); });
+  m.append(el('<div class="sec">Peso corporal</div>'));
+  const pc = el(`<div class="card"><div class="row"><div class="grow"><div class="bebas" style="font-size:40px;line-height:1">${num(pesoActual())} kg</div><div class="small mut">objetivo ${num(PERFIL.pesoObj)} kg · faltan ${num(Math.max(0, pesoActual() - PERFIL.pesoObj))} kg</div></div>
+    <input id="np" inputmode="decimal" placeholder="kg" style="width:76px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;font-size:16px"><button class="sm">Apuntar</button></div></div>`);
+  $('button', pc).onclick = () => { const v = +($('#np', pc).value || '').replace(',', '.'); if (v > 30) { DB.pesos = DB.pesos.filter(p => p.f !== key(today())); DB.pesos.push({ f: key(today()), kg: v }); save(); toast('Peso apuntado'); render(); } };
+  m.append(pc);
+  m.append(el(grafica(ps.map(p => ({ x: fmt(parse(p.f)), y: +p.kg })), PERFIL.pesoObj, 'kg')));
+  m.append(el('<div class="sec">Fuerza por ejercicio</div>'));
+  const ids = [...new Set(DB.logs.flatMap(l => l.ex.filter(x => x.sets.length).map(x => x.id)))].filter(id => LIB[id] && LIB[id].inc);
+  if (!ids.length) m.append(el('<div class="card mut small">Cuando hagas tu primera sesión, aquí verás cómo suben tus pesos.</div>'));
+  else {
+    if (!ids.includes(proSel)) proSel = ids[0];
+    const ch = el('<div class="chips"></div>'); ids.forEach(id => { const b = el(`<button class="chip ${id === proSel ? 'on' : ''}">${LIB[id].n}</button>`); b.onclick = () => { proSel = id; render(); }; ch.append(b); }); m.append(ch);
+    const pts = DB.logs.slice().sort((a, b) => a.f < b.f ? -1 : 1).map(l => { const x = l.ex.find(e => e.id === proSel); return x && x.sets.length ? { x: fmt(parse(l.f)), y: Math.max(...x.sets.map(s => s.kg)) } : null; }).filter(Boolean);
+    m.append(el(grafica(pts, null, 'kg')));
   }
-  m.append(el('<h3>Historial</h3>'));
-  if (!DB.logs.length) m.append(el('<p class="mut">Aquí irán tus entrenos.</p>'));
-  DB.logs.slice().reverse().slice(0, 30).forEach(l => { const c = el(`<button class="card item ${l.cardio ? 'str' : 'gym'}"><span class="ic">${l.cardio ? '🚴' : '🏋️'}</span><span class="tx"><b>${l.ses}</b><span>${fmt(parse(l.fecha))}${l.cardio ? '' : ` · ${Math.round(l.dur)} min · ${num(l.vol / 1000)} t`}</span></span><span class="st">›</span></button>`); if (!l.cardio) c.onclick = () => verResumen(l); m.append(c); });
-}
-
-// ---------- GRÁFICAS (SVG) ----------
-function barras(v, l, col = '#f97316') {
-  const W = 320, H = 120, mx = Math.max(...v, 0.001), bw = W / v.length;
-  return `<svg viewBox="0 0 ${W} ${H + 18}" class="chart">${v.map((x, i) => { const h = x / mx * (H - 16); return `<rect x="${i * bw + 4}" y="${H - h}" width="${bw - 8}" height="${h}" rx="4" fill="${col}" opacity="${i === v.length - 1 ? 1 : .6}"/>${x ? `<text x="${i * bw + bw / 2}" y="${H - h - 4}" text-anchor="middle" class="cv">${num(x)}</text>` : ''}<text x="${i * bw + bw / 2}" y="${H + 14}" text-anchor="middle" class="cl">${l[i]}</text>`; }).join('')}</svg>`;
-}
-function linea(pts, obj, u) {
-  const W = 320, H = 130, P = 26;
-  const ys = pts.map(p => p.y).concat(obj != null ? [obj] : []); let y0 = Math.min(...ys), y1 = Math.max(...ys); if (y1 - y0 < 1) { y0 -= 0.5; y1 += 0.5; }
-  const x0 = pts[0].x, x1 = pts[pts.length - 1].x || x0 + 1;
-  const X = x => P + (x - x0) / ((x1 - x0) || 1) * (W - P - 8), Y = y => 8 + (y1 - y) / (y1 - y0) * (H - 24);
-  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" class="chart">${obj != null ? `<line x1="${P}" x2="${W - 8}" y1="${Y(obj)}" y2="${Y(obj)}" stroke="#22c55e" stroke-dasharray="4 4"/><text x="${W - 8}" y="${Y(obj) - 4}" text-anchor="end" class="cl" fill="#22c55e">objetivo ${num(obj)}</text>` : ''}
-  <path d="${d}" fill="none" stroke="#f97316" stroke-width="2.5"/>${pts.map(p => `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="3" fill="#f97316"/>`).join('')}
-  <text x="2" y="${Y(y1) + 4}" class="cl">${num(y1)}</text><text x="2" y="${Y(y0) + 4}" class="cl">${num(y0)}</text>
-  <text x="${P}" y="${H - 2}" class="cl">${fmt(new Date(x0))}</text><text x="${W - 8}" y="${H - 2}" text-anchor="end" class="cl">${fmt(new Date(x1))}</text></svg>`;
-}
-
-// ---------- AJUSTES ----------
-function vAjustes(m) {
-  const P = DB.perfil;
-  m.append(el('<h2>Ajustes</h2>'));
-  m.append(el(`<div class="card"><b>Tu perfil</b><p class="mut">${P.edad} años · ${P.altura} cm · ${num(pesoActual())} kg · ${{ bajar: 'bajar peso y ganar fuerza', musculo: 'ganar músculo', mantener: 'mantener y rendir' }[P.objetivo]}<br>${{ cero: 'Empezando', algo: 'Algo de experiencia', mucho: 'Con experiencia' }[P.nivel]} · ${P.lugar === 'gym' ? 'gimnasio' : 'casa'} · ${P.dias.map(d => DC[d]).join(' ')} · ${P.min} min<br>Prioridad: ${{ pierna: 'pierna', equilibrado: 'equilibrado', superior: 'tren superior' }[P.prioridad]}${P.lumbar ? ' · cuida lumbar' : ''}${P.gemelo ? ' · cuida gemelo' : ''}${P.finde ? ` · Monegros ${fmt(parse(P.monegros))}` : ''}</p></div>`));
-  const b1 = el('<button class="btn wide">Rehacer el cuestionario</button>'); b1.onclick = () => { if (confirm('Rehaces el cuestionario y se genera un plan nuevo. Tu historial y tus pesos se conservan. ¿Seguimos?')) { onboarding(true); } }; m.append(b1);
-  const b2 = el('<button class="btn ghost wide">⬇️ Guardar copia de seguridad</button>'); b2.onclick = exportar; m.append(b2);
-  const b3 = el('<button class="btn ghost wide">⬆️ Cargar copia de seguridad</button>'); b3.onclick = importar; m.append(b3);
-  const b4 = el('<button class="btn ghost wide danger">Borrar todo y empezar de cero</button>'); b4.onclick = () => { if (confirm('Se borra TODO: plan, entrenos, pesos. No hay vuelta atrás. ¿Seguro?')) { localStorage.removeItem(KEY); location.reload(); } }; m.append(b4);
-  m.append(el('<p class="mut" style="text-align:center;margin-top:20px">Coach Iñaki · v3</p>'));
+  m.append(el('<div class="sec">Constancia</div>'));
+  const tot = Object.values(DB.hecho).filter(h => h.gym).length, sal = Object.values(DB.salidas);
+  m.append(el(`<div class="stats"><div><b>${tot}</b><span>sesiones gym</span></div><div><b>${sal.length}</b><span>salidas</span></div><div><b>${num(sal.reduce((a, s) => a + (+s.km || 0), 0), 0)}</b><span>km</span></div><div><b>${num(sal.reduce((a, s) => a + (+s.des || 0), 0), 0)}</b><span>m desnivel</span></div></div>`));
+  DB.logs.slice().sort((a, b) => a.f < b.f ? 1 : -1).slice(0, 5).forEach(l => { const c = el(`<button class="card btn"><div class="row"><div class="grow"><b>${SESIONES[l.ses] ? SESIONES[l.ses].n : l.ses}</b><div class="small mut">${fmt(parse(l.f))} · ${l.min} min · ${num(l.vol / 1000)} t</div></div><span class="mut">›</span></div></button>`); c.onclick = () => verResumenDia(l.f); m.append(c); });
+  m.append(el('<div class="sec">Chequeo y copia de seguridad</div>'));
+  const b1 = el('<button class="big ghost" style="margin-bottom:8px">📝 Hacer el chequeo de la semana</button>'); b1.onclick = abrirChequeo; m.append(b1);
+  const b2 = el('<button class="big ghost" style="margin-bottom:8px">📤 Copiar mis datos (para pasárselos a Claude)</button>'); b2.onclick = exportar; m.append(b2);
+  const b3 = el('<button class="big ghost">📥 Cargar una copia</button>'); b3.onclick = importar; m.append(b3);
 }
 function exportar() {
-  const b = new Blob([JSON.stringify(DB)], { type: 'application/json' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `coach-copia-${key(today())}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  const txt = JSON.stringify(DB);
+  try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' })); a.download = `monegros-copia-${key(today())}.json`; a.click(); } catch (e) { }
+  (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Copiado y descargado')).catch(() => {
+    hoja(`<h2 style="font-size:26px">Tus datos</h2><div class="small mut">Selecciona todo y copia</div><textarea style="width:100%;height:240px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:8px">${esc(txt)}</textarea>`);
+  });
 }
 function importar() {
-  const i = document.createElement('input'); i.type = 'file'; i.accept = 'application/json,.json';
-  i.onchange = () => { const f = i.files[0]; if (!f) return; f.text().then(t => { try { const d = JSON.parse(t); if (!d.v) throw 0; if (!confirm('Esto sustituye los datos actuales por los de la copia. ¿Seguro?')) return; DB = d; save(); render(); toast('Copia cargada'); } catch (e) { toast('Ese archivo no es una copia válida'); } }); };
-  i.click();
-}
-
-// ---------- CUESTIONARIO INICIAL ----------
-function onboarding(rehacer) {
-  const A = Object.assign({}, PERFIL_DEF, DB.perfil || {});
-  const pasos = [
-    { t: '¿Hombre o mujer?', s: 'Para calcular tus calorías.', op: [['h', 'Hombre'], ['m', 'Mujer']], k: 'sexo' },
-    { t: 'Tus datos', s: 'Edad, altura y peso de hoy.', f: [['edad', 'Edad', 'años'], ['altura', 'Altura', 'cm'], ['peso', 'Peso', 'kg']] },
-    { t: '¿Qué buscas?', op: [['bajar', 'Bajar peso y ganar fuerza'], ['musculo', 'Ganar músculo'], ['mantener', 'Mantener y rendir en bici']], k: 'objetivo' },
-    { t: '¿A qué peso quieres llegar?', s: 'Y a qué ritmo. Más de 0,5 kg por semana cuesta fuerza.', f: [['pesoObj', 'Peso objetivo', 'kg'], ['ritmo', 'Ritmo', 'kg/semana']], si: () => A.objetivo === 'bajar' },
-    { t: '¿Qué experiencia tienes en el gimnasio?', op: [['cero', 'Ninguna o casi ninguna'], ['algo', 'Algo: conozco las máquinas'], ['mucho', 'Bastante: entreno hace tiempo']], k: 'nivel' },
-    { t: '¿Dónde entrenas?', op: [['gym', 'En el gimnasio'], ['casa', 'En casa (mancuernas y peso corporal)']], k: 'lugar' },
-    { t: '¿Qué días vas a entrenar fuerza?', s: 'Elige de 2 a 4. Con 4 se reparte en pierna y tren superior.', dias: true },
-    { t: '¿Cuánto tiempo por sesión?', op: [[45, '45 minutos'], [60, '1 hora'], [75, '1 hora y cuarto']], k: 'min' },
-    { t: '¿Qué quieres priorizar?', op: [['pierna', 'Pierna (más series)'], ['equilibrado', 'Todo por igual'], ['superior', 'Tren superior']], k: 'prioridad' },
-    { t: '¿Algo que cuidar?', s: 'Quito los ejercicios que no te convienen.', chk: [['lumbar', 'Lumbar delicada'], ['gemelo', 'Gemelo (prevención)']] },
-    { t: 'Bici y monte', s: '¿Metemos el plan de fin de semana de BTT y trail hasta Monegros?', op: [[true, 'Sí, con el plan de Monegros'], [false, 'No, solo gimnasio']], k: 'finde' },
-    { t: '¿Cuándo es Monegros?', s: 'Fecha estimada: último sábado de abril. Cámbiala cuando la publiquen.', fecha: 'monegros', si: () => A.finde },
-  ];
-  let i = 0;
-  const o = overlay(rehacer ? 'Rehacer el plan' : 'Vamos a hacer tu plan', '');
-  if (!rehacer) o.head.querySelector('.back').style.visibility = 'hidden';
-  const back = () => { do { i--; } while (i > 0 && pasos[i].si && !pasos[i].si()); if (i < 0) { if (rehacer) o.close(); i = 0; } pint(); };
-  o.head.querySelector('.back').onclick = () => i === 0 ? (rehacer ? o.close() : null) : back();
-  const sig = () => { do { i++; } while (i < pasos.length && pasos[i].si && !pasos[i].si()); if (i >= pasos.length) return acabar(); pint(); };
-  const pint = () => {
-    const p = pasos[i]; const B = o.body; const vis = pasos.filter(x => !x.si || x.si()); const n = vis.indexOf(p) + 1;
-    o.head.querySelector('span').textContent = `Paso ${n} de ${vis.length}`;
-    B.innerHTML = `<div class="barra"><span style="width:${n / vis.length * 100}%"></span></div><h2>${p.t}</h2>${p.s ? `<p class="mut">${p.s}</p>` : ''}`;
-    if (p.op) p.op.forEach(([v, t]) => { const b = el(`<button class="card opt ${A[p.k] === v ? 'sel' : ''}">${t}</button>`); b.onclick = () => { A[p.k] = v; sig(); }; B.append(b); });
-    if (p.f) { p.f.forEach(([k, t, u]) => B.append(el(`<label class="lab">${t} (${u})<input type="number" inputmode="decimal" step="0.1" data-k="${k}" value="${A[k]}"></label>`))); }
-    if (p.fecha) B.append(el(`<label class="lab">Fecha<input type="date" data-k="${p.fecha}" value="${A[p.fecha]}"></label>`));
-    if (p.dias) { const r = el(`<div class="chips big">${DC.map((d, j) => `<button class="${A.dias.includes(j) ? 'on' : ''}">${d}</button>`).join('')}</div>`); r.querySelectorAll('button').forEach((b, j) => b.onclick = () => { A.dias = A.dias.includes(j) ? A.dias.filter(x => x !== j) : [...A.dias, j].sort(); b.classList.toggle('on'); }); B.append(r); }
-    if (p.chk) p.chk.forEach(([k, t]) => { const b = el(`<button class="card opt ${A[k] ? 'sel' : ''}">${A[k] ? '☑' : '☐'} ${t}</button>`); b.onclick = () => { A[k] = !A[k]; pint(); }; B.append(b); });
-    if (!p.op) {
-      const b = el('<button class="btn big wide">Siguiente</button>');
-      b.onclick = () => {
-        let ok = true;
-        B.querySelectorAll('input[data-k]').forEach(x => { if (x.type === 'date') { if (!x.value) ok = false; A[x.dataset.k] = x.value; } else { const v = parseFloat(String(x.value).replace(',', '.')); if (!v) ok = false; A[x.dataset.k] = v; } });
-        if (p.dias && (A.dias.length < 2 || A.dias.length > 4)) return toast('Elige entre 2 y 4 días');
-        if (!ok) return toast('Rellena todos los datos');
-        sig();
-      };
-      B.append(b);
-    }
-  };
-  const acabar = () => {
-    o.body.innerHTML = `<div class="calc"><div class="spin"></div><h3>Calculando tu plan…</h3><p class="mut">Eligiendo ejercicios, series y pesos para ti.</p></div>`;
-    setTimeout(() => {
-      DB.perfil = A; DB.plan = generarPlan(A); DB.swaps = {}
-      if (!DB.pesos.length || rehacer) { DB.pesos = DB.pesos.filter(p => p.f !== key(today())); DB.pesos.push({ f: key(today()), kg: A.peso }); }
-      save();
-      const N = nutri();
-      o.body.innerHTML = `<h2>Tu plan está listo 💪</h2>
-      <div class="card"><b>${DB.plan.sesiones.length} sesiones de fuerza</b><p class="mut">${A.dias.map(d => DN[d]).join(', ')} · unos ${A.min} min</p>${DB.plan.sesiones.map(s => `<p>• ${s.n}: ${s.items.length} ejercicios</p>`).join('')}</div>
-      <div class="card"><b>${N.kcal} kcal al día</b><p class="mut">${N.p} g proteína · ${N.c} g hidratos · ${N.g} g grasa</p></div>
-      ${A.finde ? `<div class="card"><b>Plan de bici y monte hasta Monegros</b><p class="mut">Sábados y domingos, con semanas de descarga.</p></div>` : ''}
-      <div class="card sug">La primera semana es de prueba: los pesos son orientativos y la app aprende de lo que apuntes. Cada lunes te pregunto cómo vas y ajusto.</div>`;
-      const b = el('<button class="btn big wide">Empezar</button>'); b.onclick = () => { o.close(); tab = 'hoy'; render(); }; o.body.append(b);
-    }, 1400);
-  };
-  pint();
+  const o = hoja(`<h2 style="font-size:26px">Cargar una copia</h2><div class="small mut" style="margin-bottom:8px">Pega aquí el texto de la copia. Sustituye lo que hay ahora.</div><textarea id="tx" style="width:100%;height:200px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:8px"></textarea><button class="big" id="ok" style="margin-top:10px">Cargar</button>`);
+  $('#ok', o).onclick = () => { try { const d = JSON.parse($('#tx', o).value); if (!d || typeof d !== 'object' || !d.prog) throw 0; DB = Object.assign(DB, d); save(); o.remove(); toast('Copia cargada'); render(); } catch (e) { toast('Ese texto no es una copia válida'); } };
 }
 
 // ---------- arranque ----------
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => { tab = b.dataset.t; planWk = 0; render(); });
 render();
-if (DB.activo && DB.perfil) abrirEntreno();
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(r => navigator.serviceWorker.ready).then(r => r.active && r.active.postMessage('fotos')).catch(() => { });
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').then(r => {
+    const fotos = [...new Set([...Object.values(SESIONES).flatMap(S => S.items.map(i => i.id)), CARDIO.id, ...ESTIRAMIENTOS, ...CALENTAMIENTO.filter(c => c.id).map(c => c.id)])].flatMap(id => [im(id, 0), im(id, 1)]);
+    navigator.serviceWorker.ready.then(reg => reg.active && reg.active.postMessage({ fotos }));
+  }).catch(() => { });
+}
