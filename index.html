@@ -52,7 +52,7 @@ h1,h2,h3,.bebas{font-family:'Bebas Neue','DM Sans',sans-serif;font-weight:400;le
 .chk{width:26px;height:26px;border-radius:8px;border:1.5px solid var(--muted);display:flex;align-items:center;justify-content:center;flex:none;font-size:15px;color:#0E1209}
 .on .chk,.chk.on{background:var(--accent);border-color:var(--accent)}
 /* nav */
-nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,1fr);background:#0b0f07;border-top:1px solid var(--border);padding:8px 0 calc(8px + env(safe-area-inset-bottom));z-index:5}
+nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(3,1fr);background:#0b0f07;border-top:1px solid var(--border);padding:8px 0 calc(8px + env(safe-area-inset-bottom));z-index:5}
 nav button{display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted);font-size:11px;font-weight:600}
 nav button span{font-size:21px;line-height:1}
 nav button.on{color:var(--accent)}
@@ -153,6 +153,13 @@ ul.l,ol.l{margin:6px 0;padding-left:20px}.l li{margin:4px 0}
 .stats span{font-size:10px;color:var(--muted)}
 .thumb.ico{display:flex;align-items:center;justify-content:center;font-size:24px;background:var(--bg)}
 label.sm{cursor:pointer}
+.drow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 14px;border-bottom:1px solid var(--border);font-size:14px}
+.drow:last-child{border-bottom:0}.drow b{width:44px;flex:none;color:var(--muted)}.drow.hoy{background:#1c2a14}.drow.hoy b{color:var(--accent)}
+.target{background:#F2F5EC;color:#0E1209;border-radius:12px;padding:14px;margin:4px 0 12px;font-size:17px;line-height:1.4}
+.target .mut{color:#4a5a3e}
+.setb{display:flex;align-items:center;width:100%;min-height:60px;padding:0 16px;margin-bottom:8px;border-radius:14px;border:1.5px solid var(--border);background:var(--card);font-weight:700;font-size:17px}
+.setb .ck{width:34px;height:34px;border-radius:50%;border:2px solid var(--muted);display:flex;align-items:center;justify-content:center;font-size:18px;flex:none}
+.setb.ok{background:#1a2915;border-color:var(--accent)}.setb.ok .ck{background:var(--accent);border-color:var(--accent);color:#0E1209}
 </style>
 </head>
 <body>

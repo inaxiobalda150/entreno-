@@ -154,13 +154,13 @@ function nutri() {
 }
 
 // ---------- navegación ----------
-const TABS = [['hoy', '🏠', 'Hoy'], ['rut', '🏋️', 'Rutinas'], ['cam', '🗺️', 'Camino'], ['com', '🍽️', 'Comer'], ['pro', '📈', 'Progreso']];
+const TABS = [['hoy', '🏠', 'Hoy'], ['rut', '🏋️', 'Rutinas'], ['pro', '📈', 'Progreso']];
 let tab = 'hoy', rutSel = null, comSel = 'rec';
 function render() {
   const m = $('#main'); m.innerHTML = '';
   ({ hoy: vHoy, rut: vRutinas, cam: vCamino, com: vComer, pro: vProgreso })[tab](m);
   const n = $('#nav'); n.innerHTML = '';
-  TABS.forEach(([k, e, t]) => { const b = el(`<button class="${tab === k ? 'on' : ''}"><span>${e}</span>${t}</button>`); b.onclick = () => { tab = k; render(); scrollTo(0, 0); }; n.append(b); });
+  TABS.forEach(([k, e, t]) => { const b = el(`<button class="${tab === k || (k === 'pro' && (tab === 'cam' || tab === 'com')) ? 'on' : ''}"><span>${e}</span>${t}</button>`); b.onclick = () => { tab = k; render(); scrollTo(0, 0); }; n.append(b); });
 }
 function overlay(titulo, sub, onclose) {
   const o = el(`<div class="ov"><div class="hd"><button class="back">‹</button><div class="grow"><b>${titulo}</b><span>${sub || ''}</span></div></div><div class="bd"></div></div>`);
@@ -177,29 +177,27 @@ function hoja(html) {
 // ---------- HOY ----------
 function vHoy(m) {
   const t = today(), w = semana(t), f = fase(Math.max(1, w)), falta = dias(t, RACE);
-  m.append(el(`<div class="top"><div><div class="d">${DN[dayIdx(t)]}, ${fmt(t)}</div><h1>${w >= 1 ? 'Semana ' + w : 'Pretemporada'}</h1></div><span class="pill" style="--c:${f.c}">${f.n}${descarga(w) ? ' · descarga' : ''}</span></div>`));
-  const st = statsSemana(monday(t));
-  m.append(el(`<div class="hero"><div class="row"><div class="grow"><div class="cnt">${falta > 0 ? falta : '🏁'}</div><div class="lbl">${falta > 0 ? 'días para Monegros' : 'Monegros'}</div></div>
-    <div style="text-align:right"><div class="bebas" style="font-size:40px;line-height:1">${st.h}<span class="mut" style="font-size:24px">/${st.p}</span></div><div class="lbl">hechos esta semana</div></div></div>
-    <div class="bar"><i style="width:${Math.min(100, Math.max(0, (w - 1 + st.frac) / 25 * 100))}%"></i></div><div class="small mut" style="margin-top:6px">${f.t}</div><div class="small" style="color:var(--accent);margin-top:6px">Ver el camino ›</div></div>`));
-  m.lastChild.style.cursor = 'pointer'; m.lastChild.onclick = () => { tab = 'cam'; render(); };
-  const wk = el('<div class="week"></div>');
-  for (let i = 0; i < 7; i++) {
-    const d = addD(monday(t), i), its = itemsDia(d).filter(x => x.k !== 'rest');
-    const ic = its.map(x => hechoItem(d, x) ? '✅' : x.k === 'gym' ? '🏋️' : TIPO[x.tipo][0]).join('');
-    const dv = el(`<div class="${key(d) === key(t) ? 'hoy' : ''} ${its.length && its.every(x => hechoItem(d, x)) ? 'fin' : ''}">${DC[i]}<b>${d.getDate()}</b><i>${ic || '·'}</i></div>`);
-    dv.onclick = () => verDia(d); wk.append(dv);
-  }
-  m.append(wk);
-  if (chequeoPendiente()) { const c = el(`<button class="card btn warn"><div class="row"><div class="ic">📝</div><div class="grow"><b>Chequeo de la semana</b><div class="small mut">1 minuto: cómo vas, lumbar, gemelo y peso</div></div><span class="sm">Hacer</span></div></button>`); c.onclick = abrirChequeo; m.append(c); }
-  m.append(el('<div class="sec">Hoy</div>'));
+  m.append(el(`<div class="top"><div><div class="d">${DN[dayIdx(t)]}, ${fmt(t)}</div><h1>Hoy toca</h1></div><span class="pill" style="--c:${f.c}">Semana ${Math.max(1, w)} · ${f.n}</span></div>`));
   const its = itemsDia(t);
-  if (!its.length) {
-    let n = addD(t, 1); while (!itemsDia(n).length && n - t < 8 * DAY) n = addD(n, 1);
-    m.append(el(`<div class="card"><div class="row"><div class="ic">😌</div><div class="grow"><b>Día de descanso</b><div class="small mut">Lo próximo: ${DN[dayIdx(n)].toLowerCase()} ${fmt(n)}</div></div></div></div>`));
-    itemsDia(n).forEach(it => m.append(tarjeta(n, it, true)));
-  } else its.forEach(it => m.append(tarjeta(t, it)));
+  if (!its.length) m.append(el(`<div class="card" style="text-align:center;padding:24px 14px"><div style="font-size:44px">😌</div><h2 style="font-size:34px">Descanso</h2><div class="mut">Hoy no toca nada. Descansa y bebe agua.</div></div>`));
+  else its.forEach(it => m.append(tarjeta(t, it)));
+  let n = addD(t, 1); while (!itemsDia(n).length && n - t < 8 * DAY) n = addD(n, 1);
+  const nx = itemsDia(n)[0];
+  if (nx) { const c = el(`<button class="card btn"><div class="row"><div class="grow"><div class="small mut">LO SIGUIENTE · ${DN[dayIdx(n)].toUpperCase()} ${fmt(n)}</div><b>${textoItem(nx)}</b></div><span class="mut">›</span></div></button>`); c.onclick = () => verDia(n); m.append(c); }
+  m.append(el('<div class="sec">Esta semana</div>'));
+  const lista = el('<div class="card" style="padding:4px 0"></div>');
+  for (let i = 0; i < 7; i++) {
+    const d = addD(monday(t), i), di = itemsDia(d).filter(x => x.k !== 'rest'), hoy = key(d) === key(t);
+    const ok = di.length && di.every(x => hechoItem(d, x)), pasado = d < t;
+    const est = ok ? '✅' : !di.length ? '' : hoy ? '<span class="pill">hoy</span>' : pasado ? '<span class="small mut">sin hacer</span>' : '';
+    const r = el(`<button class="drow ${hoy ? 'hoy' : ''}"><b>${DC[i]} ${d.getDate()}</b><span class="grow">${di.length ? di.map(textoItem).join(' + ') : '<span class="mut">Descanso</span>'}</span>${est}</button>`);
+    r.onclick = () => verDia(d); lista.append(r);
+  }
+  m.append(lista);
+  const c = el(`<button class="card btn"><div class="row"><div class="ic">🏁</div><div class="grow"><b>${falta > 0 ? falta + ' días para Monegros' : 'Monegros'}</b><div class="small mut">Ver el camino</div></div><span class="mut">›</span></div></button>`);
+  c.onclick = () => { tab = 'cam'; render(); scrollTo(0, 0); }; m.append(c);
 }
+const textoItem = it => it.k === 'gym' ? `🏋️ ${SESIONES[it.ses].n}` : it.k === 'out' ? `${TIPO[it.tipo][0]} ${TIPO[it.tipo][1]} ${horas(it.h)}` : '🏁 Descanso';
 function tarjeta(d, it, futuro) {
   if (it.k === 'rest') return el(`<div class="card note"><b>🏁 ${it.t}</b></div>`);
   const ok = hechoItem(d, it);
@@ -291,86 +289,90 @@ function nuevoDraft(ses, d) {
 }
 function abrirEntreno(ses, d) {
   if (!DB.draft || DB.draft.k !== key(d) || DB.draft.ses !== ses) { DB.draft = nuevoDraft(ses, d); save(); }
-  const D = DB.draft, S = SESIONES[ses];
+  const D = DB.draft, S = SESIONES[ses], N = S.items.length;
   const pasos = ['cal', ...S.items.map((_, i) => i), 'cardio', 'est'];
   const ov = overlay(S.n, '', () => { pararDescanso(); despierto(false); render(); });
   despierto(true);
   const foot = el('<div class="foot"></div>'); ov.o.append(foot);
+  const ir = i => { D.paso = Math.max(0, Math.min(pasos.length - 1, i)); save(); dibujar(); ov.bd.scrollTop = 0; };
+  const botones = (txt, fn) => {
+    foot.innerHTML = '';
+    const g = el(`<div style="display:grid;grid-template-columns:${D.paso ? '1fr 3fr' : '1fr'};gap:8px"></div>`);
+    if (D.paso) { const a = el('<button class="big ghost">‹</button>'); a.onclick = () => ir(D.paso - 1); g.append(a); }
+    const b = el(`<button class="big">${txt}</button>`); b.onclick = fn || (() => ir(D.paso + 1)); g.append(b); foot.append(g);
+  };
   const dibujar = () => {
-    const p = pasos[D.paso]; const top = ov.bd.scrollTop; ov.bd.innerHTML = ''; foot.innerHTML = '';
-    $('span', ov.hd).textContent = `${S.dia} · paso ${D.paso + 1} de ${pasos.length}`;
-    const dots = el('<div class="dots"></div>');
-    pasos.forEach((q, i) => { const b = el(`<button class="${i === D.paso ? 'on' : ''} ${(typeof q === 'number' ? D.ex[q].sets.every(s => s.ok) : q === 'cardio' ? D.cardio : q === 'est' ? D.est : i < D.paso) ? 'ok' : ''}"></button>`); b.onclick = () => ir(i); dots.append(b); });
-    ov.bd.append(dots);
-    if (D.lig && D.paso === 0) ov.bd.append(el('<div class="card note small"><b>Semana suave:</b> mismo peso y 2 series por ejercicio. Toca recuperar.</div>'));
-    const sig = (txt, fn) => { const b = el(`<button class="big">${txt}</button>`); b.onclick = fn || (() => ir(D.paso + 1)); foot.append(b); return b; };
+    const p = pasos[D.paso], top = ov.bd.scrollTop; ov.bd.innerHTML = '';
+    $('span', ov.hd).textContent = p === 'cal' ? 'Calentamiento' : typeof p === 'number' ? `Ejercicio ${p + 1} de ${N}` : p === 'cardio' ? 'Cinta' : 'Estiramientos';
+    if (D.lig && D.paso === 0) ov.bd.append(el('<div class="card note small"><b>Semana suave:</b> mismo peso y solo 2 series. Toca recuperar.</div>'));
     if (p === 'cal') {
-      ov.bd.append(el('<h2 style="font-size:30px;margin-bottom:8px">Calentamiento · 8 min</h2>'));
-      CALENTAMIENTO.forEach((c, i) => {
-        const r = el(`<button class="card btn ${D.cal[i] ? 'on ok' : ''}"><div class="exrow">${c.id ? `<img src="${im(c.id)}" alt="">` : '<div class="thumb ico">🔁</div>'}<div class="grow"><b>${c.n}</b><div class="small mut">${c.t}</div></div><span class="chk">${D.cal[i] ? '✓' : ''}</span></div></button>`);
-        r.onclick = () => { D.cal[i] = !D.cal[i]; save(); dibujar(); }; ov.bd.append(r);
-      });
-      sig('EMPEZAR FUERZA →');
+      ov.bd.append(el('<div><h2 style="font-size:32px">Calentamiento</h2><div class="mut" style="margin-bottom:10px">8 minutos, en este orden</div></div>'));
+      CALENTAMIENTO.forEach((c, i) => ov.bd.append(el(`<div class="card"><div class="exrow">${c.id ? `<img src="${im(c.id)}" alt="">` : '<div class="thumb ico">🔁</div>'}<div class="grow"><b>${i + 1}. ${c.n}</b><div class="small mut">${c.t}</div></div></div></div>`)));
+      botones('YA HE CALENTADO →');
     } else if (typeof p === 'number') {
-      dibujarEj(ov.bd, S.items[p], D.ex[p], p, S.items.length, () => { dibujar(); });
-      sig(p === S.items.length - 1 ? 'IR A LA CINTA →' : 'SIGUIENTE EJERCICIO →');
+      dibujarEj(ov.bd, S.items[p], D.ex[p], p, N, dibujar);
+      botones(p === N - 1 ? 'IR A LA CINTA →' : 'SIGUIENTE EJERCICIO →');
       ov.bd.scrollTop = top;
     } else if (p === 'cardio') {
-      ov.bd.append(el(`<h2 style="font-size:30px">Cinta · ${CARDIO.min} min</h2>`));
-      ov.bd.append(el(`<div class="pair"><div><img src="${im(CARDIO.id, 0)}" alt=""><span>Inicial</span></div><div><img src="${im(CARDIO.id, 1)}" alt=""><span>En marcha</span></div></div>`));
-      ov.bd.append(el(`<div class="card small" style="margin-top:10px">${LIB[CARDIO.id].pasos.map(x => '• ' + x).join('<br>')}<div style="margin-top:8px;color:var(--warn)">${LIB[CARDIO.id].gem}</div></div>`));
+      ov.bd.append(el(`<h2 style="font-size:32px">Cinta · ${CARDIO.min} minutos</h2>`));
+      ov.bd.append(el(`<div class="pair"><div><img src="${im(CARDIO.id, 0)}" alt=""></div><div><img src="${im(CARDIO.id, 1)}" alt=""></div></div>`));
+      ov.bd.append(el(`<div class="card"><b>Anda rápido en cuesta</b> (inclinación 6-10 %, 5-5,5 km/h) <b>o trota suave</b> si el gemelo va bien. Tienes que poder hablar.</div>`));
       ov.bd.append(reloj(CARDIO.min * 60, () => { D.cardio = true; save(); }));
-      const c = el(`<button class="card btn ${D.cardio ? 'on ok' : ''}"><div class="row"><span class="chk">${D.cardio ? '✓' : ''}</span><b>Cinta hecha</b></div></button>`);
-      c.onclick = () => { D.cardio = !D.cardio; save(); dibujar(); }; ov.bd.append(c);
-      sig('ESTIRAMIENTOS →');
-    } else if (p === 'est') {
-      ov.bd.append(el('<h2 style="font-size:30px">Estiramientos</h2>'));
-      ov.bd.append(el('<div class="small mut" style="margin-bottom:10px">12 estiramientos · 20-30 s cada uno · respira profundo</div>'));
+      botones('CINTA HECHA → ESTIRAR', () => { D.cardio = true; ir(D.paso + 1); });
+    } else {
+      ov.bd.append(el('<div><h2 style="font-size:32px">Estiramientos</h2><div class="mut" style="margin-bottom:10px">Pulsa empezar y van solos, uno detrás de otro (unos 8 min).</div></div>'));
+      const b = el(`<button class="big" style="margin-bottom:12px">${D.est ? '✓ Hechos · repetir' : '▶ EMPEZAR ESTIRAMIENTOS'}</button>`);
+      b.onclick = () => estirar(() => { D.est = true; save(); terminar(ov); }); ov.bd.append(b);
       ov.bd.append(gridEst());
-      const b = el(`<button class="big ${D.est ? 'ghost' : ''}" style="margin-top:12px">${D.est ? '✓ Hechos · repetir' : 'EMPEZAR ESTIRAMIENTOS GUIADOS'}</button>`);
-      b.onclick = () => estirar(() => { D.est = true; save(); dibujar(); }); ov.bd.append(b);
-      sig('TERMINAR SESIÓN ✓', () => terminar(ov));
+      botones('TERMINAR SESIÓN ✓', () => terminar(ov));
     }
   };
-  const ir = i => { D.paso = Math.max(0, Math.min(pasos.length - 1, i)); save(); ov.bd.scrollTop = 0; dibujar(); ov.bd.scrollTop = 0; };
   dibujar();
 }
 function dibujarEj(bd, it, x, i, n, redraw) {
-  const e = LIB[x.id] || {}, sg = sugerencia(Object.assign({}, it, { id: x.id })), conPeso = !it.seg && e.inc;
-  bd.append(el(`<div class="row" style="align-items:flex-start;margin-bottom:8px"><span class="nb">${i + 1}</span><div class="grow"><div class="lam-n" style="font-size:28px">${e.n}</div><div class="small mut">${e.mus || e.m || ''} · ejercicio ${i + 1} de ${n}</div></div><span class="sr">${presc(it, x.sets.length)}</span></div>`));
+  const e = LIB[x.id] || {}, conPeso = !it.seg && e.inc, hechas = x.sets.filter(s => s.ok).length, s0 = x.sets.find(s => !s.ok) || x.sets[x.sets.length - 1];
+  const rango = it.seg ? `${it.seg[0]}-${it.seg[1]} segundos` : `${it.r[0] === it.r[1] ? it.r[0] : it.r[0] + '-' + it.r[1]} repeticiones`;
+  bd.append(el(`<div><div class="lam-n" style="font-size:32px">${e.n}</div><div class="small mut">${e.mus || e.m || ''}</div></div>`));
   const pr = el(`<div class="pair"><div><img src="${im(x.id, 0)}" alt=""><span>Inicial</span></div><div><img src="${im(x.id, 1)}" alt=""><span>Final</span></div></div>`);
   pr.onclick = () => ficha(x.id); bd.append(pr);
-  const lnk = el('<div class="row" style="gap:8px;margin:8px 0 12px"><button class="sm ghost">Cómo se hace</button><button class="sm ghost">Cambiar ejercicio</button></div>');
-  $$('button', lnk)[0].onclick = () => ficha(x.id);
-  $$('button', lnk)[1].onclick = () => cambiar(it, x, redraw);
-  bd.append(lnk);
-  const prev = DB.prog[x.id];
-  bd.append(el(`<div class="small" style="color:var(--accent);margin-bottom:8px">${it.seg ? `Objetivo: ${sg.reps} s` : !e.inc ? `Peso corporal · objetivo ${sg.reps} repeticiones` : sg.nuevo ? `Primera vez: empieza ligero, que te sobren 2-3 repeticiones` : `Te toca: ${num(prev.kg)} kg × ${sg.reps}`}${e.gem ? `<br><span style="color:var(--warn)">${e.gem}</span>` : ''}</div>`));
+  const nuevo = !DB.prog[x.id] && conPeso;
+  bd.append(el(`<div class="target">Haz <b>${x.sets.length} series</b> de <b>${rango}</b>${it.uni ? ' <b>por lado</b>' : ''}${conPeso ? ` con <b>${num(+s0.kg)} kg</b>` : it.seg ? '' : ' (sin peso)'}
+    ${nuevo ? '<div class="small" style="margin-top:6px;color:var(--warn)">Primera vez: el peso es orientativo. Que te sobren 2-3 repeticiones; si no, bájalo.</div>' : ''}
+    <div class="small mut" style="margin-top:6px">Descansa ${it.d} s entre series.</div></div>`));
   x.sets.forEach((s, j) => {
-    const r = el(`<div class="set ${s.ok ? 'ok' : ''}"><span class="n">${j + 1}</span>
-      ${conPeso ? `<div class="stp"><button data-a="k-">−</button><span>${num(+s.kg)}<small> kg</small></span><button data-a="k+">+</button></div>` : ''}
-      <div class="stp"><button data-a="r-">−</button><span>${s.reps}<small> ${it.seg ? 's' : 'rep'}</small></span><button data-a="r+">+</button></div>
-      <button class="go">✓</button></div>`);
-    $$('[data-a]', r).forEach(b => b.onclick = () => {
-      const a = b.dataset.a;
-      if (a === 'k-') s.kg = Math.max(0, +s.kg - (e.inc || 1)); if (a === 'k+') s.kg = +s.kg + (e.inc || 1);
-      if (a === 'r-') s.reps = Math.max(0, s.reps - (it.seg ? 5 : 1)); if (a === 'r+') s.reps = s.reps + (it.seg ? 5 : 1);
-      save(); redraw();
-    });
-    $('.go', r).onclick = () => {
+    const lbl = `${conPeso ? num(+s.kg) + ' kg × ' : ''}${s.reps} ${it.seg ? 's' : 'rep'}`;
+    const b = el(`<button class="setb ${s.ok ? 'ok' : ''}"><span>Serie ${j + 1}</span><span class="grow small" style="text-align:right;margin-right:12px">${lbl}</span><span class="ck">${s.ok ? '✓' : ''}</span></button>`);
+    b.onclick = () => {
       s.ok = !s.ok;
       if (s.ok) x.sets.slice(j + 1).forEach(q => { if (!q.ok) { q.kg = s.kg; q.reps = s.reps; } });
-      save(); redraw();
-      if (s.ok) empezarDescanso(it.d, x.sets.every(q => q.ok));
+      save(); redraw(); if (s.ok) empezarDescanso(it.d, x.sets.every(q => q.ok));
     };
-    bd.append(r);
+    bd.append(b);
   });
-  if (x.sets.every(s => s.ok)) {
+  const ed = el(`<button class="sm ghost" style="margin:4px 0 10px">${x.edit ? 'Listo' : conPeso ? 'Cambiar peso o repeticiones' : 'Cambiar repeticiones'}</button>`);
+  ed.onclick = () => { x.edit = !x.edit; save(); redraw(); }; bd.append(ed);
+  if (x.edit) {
+    const s = s0;
+    const r = el(`<div class="card">${conPeso ? `<div class="small mut">Peso</div><div class="stp" style="margin:4px 0 10px"><button data-a="k-">−</button><span>${num(+s.kg)}<small> kg</small></span><button data-a="k+">+</button></div>` : ''}
+      <div class="small mut">${it.seg ? 'Segundos' : 'Repeticiones'}</div><div class="stp" style="margin-top:4px"><button data-a="r-">−</button><span>${s.reps}<small> ${it.seg ? 's' : 'rep'}</small></span><button data-a="r+">+</button></div>
+      <div class="small mut" style="margin-top:8px">Se aplica a la serie que toca y a las siguientes.</div></div>`);
+    $$('[data-a]', r).forEach(b => b.onclick = () => {
+      const a = b.dataset.a; let kg = +s.kg, rp = s.reps;
+      if (a === 'k-') kg = Math.max(0, kg - (e.inc || 1)); if (a === 'k+') kg = kg + (e.inc || 1);
+      if (a === 'r-') rp = Math.max(0, rp - (it.seg ? 5 : 1)); if (a === 'r+') rp = rp + (it.seg ? 5 : 1);
+      x.sets.forEach(q => { if (!q.ok || q === s) { q.kg = kg; q.reps = rp; } }); save(); redraw();
+    });
+    bd.append(r);
+  }
+  if (hechas === x.sets.length) {
     bd.append(el('<div class="sec">¿Cómo ha ido?</div>'));
-    const f = el(`<div class="feel"><button data-f="facil" class="${x.feel === 'facil' ? 'on' : ''}">😌 Fácil<br><small class="mut">sobraban 4+</small></button><button data-f="bien" class="${x.feel === 'bien' ? 'on' : ''}">👍 Bien<br><small class="mut">sobraban 2-3</small></button><button data-f="duro" class="${x.feel === 'duro' ? 'on' : ''}">🥵 Duro<br><small class="mut">al límite</small></button></div>`);
+    const f = el(`<div class="feel"><button data-f="facil" class="${x.feel === 'facil' ? 'on' : ''}">😌 Fácil</button><button data-f="bien" class="${x.feel === 'bien' ? 'on' : ''}">👍 Bien</button><button data-f="duro" class="${x.feel === 'duro' ? 'on' : ''}">🥵 Duro</button></div>`);
     $$('button', f).forEach(b => b.onclick = () => { x.feel = b.dataset.f; save(); redraw(); });
     bd.append(f);
   }
+  const lnk = el('<div class="row" style="gap:8px;margin-top:6px"><button class="sm ghost">Cómo se hace</button><button class="sm ghost">Máquina ocupada: cambiar</button></div>');
+  $$('button', lnk)[0].onclick = () => ficha(x.id); $$('button', lnk)[1].onclick = () => cambiar(it, x, redraw);
+  bd.append(lnk);
 }
 function cambiar(it, x, redraw) {
   const e = LIB[it.id]; const alts = Object.keys(LIB).filter(k => k !== x.id && k !== it.id && LIB[k].p && LIB[k].p === e.p && LIB[k].lum !== false);
@@ -432,29 +434,37 @@ function verResumenDia(k, recien) {
 // ---------- ESTIRAMIENTOS GUIADOS ----------
 function estirar(onDone) {
   const pasos = []; ESTIRAMIENTOS.forEach(id => { if (ST[id].lados) { pasos.push([id, 1]); pasos.push([id, 2]); } else pasos.push([id, 0]); });
-  let i = 0, t = null, rest = 0;
-  const ov = overlay('Estiramientos', '12 estiramientos guiados', () => { clearInterval(t); if (!onDone) render(); });
+  let i = 0, t = null, rest = 0, fase = 'listo';
+  const ov = overlay('Estiramientos', 'Van solos: tú solo sigue la foto', () => { clearInterval(t); despierto(false); if (!onDone) render(); });
+  despierto(true);
   const foot = el('<div class="foot"></div>'); ov.o.append(foot);
   const pinta = () => {
-    clearInterval(t); t = null;
-    const [id, lado] = pasos[i], s = ST[id]; rest = s.s;
+    const [id, lado] = pasos[i], s = ST[id];
+    const prep = fase === 'prep';
     ov.bd.innerHTML = `<div class="small mut">${i + 1} de ${pasos.length}</div><div class="bar" style="margin:6px 0 12px"><i style="width:${(i + 1) / pasos.length * 100}%"></i></div>
+      ${prep ? '<div class="pill" style="--c:var(--warn)">Prepárate</div>' : ''}
       <h2 style="font-size:34px">${s.n}${lado ? ` · lado ${lado}` : ''}</h2>
       <div class="pair"><div><img src="${im(id, 0)}" alt=""></div><div><img src="${im(id, 1)}" alt=""></div></div>
       <div class="card" style="margin-top:10px">${s.t}</div>
-      <div style="text-align:center"><div class="bebas" id="cr" style="font-size:80px;color:var(--accent);line-height:1">${rest}</div><div class="small mut">segundos</div></div>`;
+      <div style="text-align:center"><div class="bebas" style="font-size:84px;color:${prep ? 'var(--warn)' : 'var(--accent)'};line-height:1">${fase === 'listo' ? s.s : rest}</div><div class="small mut">${prep ? 'empieza en…' : 'segundos'}</div></div>`;
     foot.innerHTML = '';
-    const go = el('<button class="big">EMPEZAR</button>');
-    go.onclick = () => {
-      if (t) return; go.textContent = 'Aguanta…';
-      t = setInterval(() => { rest--; const c = $('#cr', ov.bd); if (c) c.textContent = rest; if (rest <= 0) { clearInterval(t); t = null; pitido(); siguiente(); } }, 1000);
-    };
-    const row = el('<div class="two" style="margin-top:8px"><button class="big ghost">‹ Anterior</button><button class="big ghost">Saltar ›</button></div>');
-    $$('button', row)[0].onclick = () => { if (i > 0) { i--; pinta(); } };
-    $$('button', row)[1].onclick = siguiente;
-    foot.append(go, row);
+    const g = el('<div style="display:grid;grid-template-columns:3fr 1fr;gap:8px"></div>');
+    const go = el(`<button class="big">${fase === 'listo' ? '▶ EMPEZAR' : t ? '⏸ PAUSA' : '▶ SEGUIR'}</button>`);
+    go.onclick = () => { if (fase === 'listo') { fase = 'prep'; rest = 5; arrancar(); } else if (t) { clearInterval(t); t = null; pinta(); } else arrancar(); };
+    const sk = el('<button class="big ghost">Saltar</button>'); sk.onclick = () => siguiente(true);
+    g.append(go, sk); foot.append(g);
   };
-  const siguiente = () => { if (i < pasos.length - 1) { i++; pinta(); } else { clearInterval(t); toast('¡Estiramientos hechos!'); ov.o.remove(); onDone ? onDone() : render(); } };
+  const arrancar = () => { clearInterval(t); t = setInterval(tick, 1000); pinta(); };
+  const tick = () => {
+    rest--;
+    if (rest > 0) { pinta(); return; }
+    if (fase === 'prep') { fase = 'hold'; rest = ST[pasos[i][0]].s; pitido(); pinta(); return; }
+    siguiente(false);
+  };
+  const siguiente = salto => {
+    if (i < pasos.length - 1) { i++; if (!salto || t) { fase = 'prep'; rest = 5; if (!t) arrancar(); else pinta(); } else { fase = 'listo'; pinta(); } }
+    else { clearInterval(t); pitido(); toast('¡Estiramientos hechos!'); ov.o.remove(); despierto(false); onDone ? onDone() : render(); }
+  };
   pinta();
 }
 
@@ -518,7 +528,7 @@ function abrirChequeo() {
 function vCamino(m) {
   const t = today(), wNow = semana(t), N = 25;
   const sal = Object.values(DB.salidas), kmTot = sal.reduce((a, s) => a + (+s.km || 0), 0), hTot = sal.reduce((a, s) => a + (+s.h || 0), 0);
-  m.append(el(`<div class="top"><h1>Camino a Monegros</h1><span class="mut small">24 abr 2027</span></div>`));
+  m.append(atras()); m.append(el(`<div class="top"><h1>Camino a Monegros</h1><span class="mut small">24 abr 2027</span></div>`));
   m.append(el(`<div class="stats"><div><b>${Math.max(0, Math.min(N, wNow))}</b><span>de 25 semanas</span></div><div><b>${Object.values(DB.hecho).filter(h => h.gym).length}</b><span>gimnasio</span></div><div><b>${num(kmTot, 0)}</b><span>km en bici</span></div><div><b>${num(hTot, 0)}</b><span>horas fuera</span></div></div>`));
   const W = 360, step = 92, H = N * step + 150, pts = [];
   for (let w = 1; w <= N; w++) pts.push([W / 2 + Math.sin(w * 0.85) * 105, H - 60 - (w - 1) * step]);
@@ -565,7 +575,7 @@ function verSemana(w) {
 
 // ---------- COMER ----------
 function vComer(m) {
-  m.append(el('<div class="top"><h1>Comer</h1></div>'));
+  m.append(atras()); m.append(el('<div class="top"><h1>Comer</h1></div>'));
   const sg = el(`<div class="seg"><button class="${comSel === 'rec' ? 'on' : ''}">🍳 Recetas</button><button class="${comSel === 'com' ? 'on' : ''}">🛒 Lista de la compra</button></div>`);
   $$('button', sg).forEach((b, i) => b.onclick = () => { comSel = i ? 'com' : 'rec'; render(); }); m.append(sg);
   if (comSel === 'rec') {
@@ -616,8 +626,13 @@ function grafica(pts, obj, u) {
     <text x="4" y="${Y(hi) + 4}" fill="#8A9C7C" font-size="11">${num(hi)}</text><text x="4" y="${Y(lo) + 4}" fill="#8A9C7C" font-size="11">${num(lo)}</text>
     <text x="${P}" y="${H - 4}" fill="#8A9C7C" font-size="11">${pts[0].x}</text><text x="${W - 10}" y="${H - 4}" text-anchor="end" fill="#8A9C7C" font-size="11">${pts[pts.length - 1].x}${u ? ' · ' + u : ''}</text></svg>`;
 }
+function atras() { const b = el('<button class="sm ghost" style="margin-bottom:10px">‹ Progreso</button>'); b.onclick = () => { tab = 'pro'; render(); scrollTo(0, 0); }; return b; }
 function vProgreso(m) {
   m.append(el('<div class="top"><h1>Progreso</h1></div>'));
+  const acc = el(`<div class="two" style="margin-bottom:6px"><button class="card btn" style="text-align:center"><div style="font-size:30px">🗺️</div><b>Camino a Monegros</b></button><button class="card btn" style="text-align:center"><div style="font-size:30px">🍽️</div><b>Comer y compra</b></button></div>`);
+  $$('button', acc)[0].onclick = () => { tab = 'cam'; render(); scrollTo(0, 0); }; $$('button', acc)[1].onclick = () => { tab = 'com'; render(); scrollTo(0, 0); };
+  m.append(acc);
+  if (chequeoPendiente()) { const c = el(`<button class="card btn warn"><div class="row"><div class="ic">📝</div><div class="grow"><b>Chequeo de la semana</b><div class="small mut">1 minuto: cómo vas, lumbar, gemelo y peso</div></div><span class="sm">Hacer</span></div></button>`); c.onclick = abrirChequeo; m.append(c); }
   const ps = DB.pesos.slice().sort((a, b) => a.f < b.f ? -1 : 1);
   m.append(el('<div class="sec">Peso corporal</div>'));
   const pc = el(`<div class="card"><div class="row"><div class="grow"><div class="bebas" style="font-size:40px;line-height:1">${num(pesoActual())} kg</div><div class="small mut">objetivo ${num(PERFIL.pesoObj)} kg · faltan ${num(Math.max(0, pesoActual() - PERFIL.pesoObj))} kg</div></div>
