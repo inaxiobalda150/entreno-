@@ -1,7 +1,6 @@
 // ===== DATOS DE LA APP: ejercicios, plan de bici y trail, recetas =====
 // Para cambiar cosas, se toca este archivo.
 
-const PERFIL_DEF = { sexo: "h", edad: 58, altura: 179, peso: 78.5, pesoObj: 72.5, ritmo: 0.5, objetivo: "bajar", nivel: "cero", lugar: "gym", dias: [0, 2, 4], min: 60, prioridad: "pierna", lumbar: true, gemelo: true, finde: true, monegros: "2027-04-24" };
 
 // p = patrón (para cambiar por otro equivalente) · m = músculo · eq = equipo (maq, polea, manc, peso, barra)
 // lum = apto lumbar delicada · ini = peso de arranque orientativo · inc = salto de peso
@@ -1023,62 +1022,11 @@ const ST = {
 const STRETCH_POST = ["Standing_Gastrocnemius_Calf_Stretch","Standing_Soleus_And_Achilles_Stretch","Hamstring_Stretch","Quad_Stretch","Kneeling_Hip_Flexor","Chest_And_Front_Of_Shoulder_Stretch","Upper_Back_Stretch"];
 
 // Fases y fines de semana hasta Monegros (la semana 25 es la de la prueba)
-const FASES = [
- {
-  "n": "Vuelta",
-  "de": 1,
-  "a": 4,
-  "c": "#22c55e",
-  "t": "Volver a coger el hábito y la técnica. Todo suave."
- },
- {
-  "n": "Base",
-  "de": 5,
-  "a": 13,
-  "c": "#38bdf8",
-  "t": "Subir horas de BTT poco a poco y ganar fuerza."
- },
- {
-  "n": "Construcción",
-  "de": 14,
-  "a": 21,
-  "c": "#f97316",
-  "t": "Tiradas largas con desnivel. Gimnasio lunes y miércoles. El viernes, bici con intervalos suaves."
- },
- {
-  "n": "Afinado",
-  "de": 22,
-  "a": 25,
-  "c": "#eab308",
-  "t": "Bajar volumen para llegar fresco a Monegros."
- },
- {
-  "n": "Recuperación",
-  "de": 26,
-  "a": 27,
-  "c": "#a3a3a3",
-  "t": "Descansar después de Monegros."
- }
-];
-// [tipo, horas, descripción] sábado / domingo
 const FINDE = [null,[["btt",1.5,"Rodaje suave por terreno cómodo. Solo volver a sentir la bici."],["trail",0.75,"Caminar rápido por monte con 6×(1 min trote / 3 min andar)."]],[["btt",1.75,"Rodaje suave, alguna subida tranquila."],["trail",0.83,"Caminar rápido con 6×(2 min trote / 3 min andar)."]],[["btt",2,"Rodaje suave con subidas cortas sentado."],["trail",0.92,"Caminar rápido con 6×(3 min trote / 2 min andar)."]],[["btt",1.5,"SEMANA DE DESCANSO: paseo suave."],["walk",0.75,"Caminata por monte sin trotar."]],[["btt",2.25,"Unos 400 m de desnivel a ritmo cómodo."],["trail",1,"5×(4 min trote / 2 min andar). Subidas andando."]],[["btt",2.5,"Unos 500 m de desnivel."],["trail",1,"4×(6 min trote / 2 min andar)."]],[["btt",2.75,"Unos 550 m de desnivel."],["trail",1.1,"3×(10 min trote / 2 min andar)."]],[["btt",2,"SEMANA DE DESCANSO: suave."],["trail",0.75,"Trote suave 20-25 min seguidos si el gemelo va bien. Si no, andar."]],[["btt",3,"Unos 600 m de desnivel. Practica comer cada hora."],["trail",1,"30-40 min de trote continuo por terreno fácil."]],[["btt",3.25,"Unos 650 m de desnivel."],["btt",1.75,"Rodaje suave de recuperación."]],[["btt",3.5,"Unos 700 m de desnivel."],["trail",1.15,"45 min de trote con las subidas andando."]],[["btt",2.5,"SEMANA DE DESCANSO: suave."],["trail",0.83,"Trote suave."]],[["btt",3.5,"Unos 750 m. Ritmo constante en pistas largas."],["btt",2,"Rodaje suave."]],[["btt",3.75,"Unos 800 m de desnivel."],["btt",2,"Rodaje suave."]],[["btt",4,"Unos 900 m. Come y bebe como en Monegros."],["trail",1.25,"Trote suave con subidas andando."]],[["btt",3,"SEMANA DE DESCANSO: suave."],["btt",1.5,"Paseo suave."]],[["btt",4.25,"Pistas largas a ritmo de Monegros (constante, sin cebarse)."],["btt",2.5,"Rodaje suave."]],[["btt",4.5,"Unos 1.000 m de desnivel."],["trail",1.25,"Trote suave."]],[["btt",5,"Unos 90 km. La más larga hasta ahora."],["btt",2,"Rodaje muy suave."]],[["btt",3,"SEMANA DE DESCANSO: suave."],["trail",1,"Trote suave."]],[["btt",5,"ENSAYO GENERAL: unos 100 km con la comida, bebida y ritmo de Monegros."],["btt",1.5,"Recuperación muy suave."]],[["btt",4,"Larga a ritmo cómodo."],["btt",2,"Rodaje suave."]],[["btt",3,"Con 3×15 min a ritmo de carrera."],["trail",0.83,"Trote suave."]],[["btt",2,"Con 3×10 min a ritmo de carrera. Revisa la bici."],["btt",1.5,"Rodaje muy suave."]],[["race",7,"ORBEA MONEGROS (larga). Come cada hora y bebe cada 15 min desde el principio."],["walk",0.75,"Paseo suave o descanso total."]]];
 
 // ---------- SESIONES TIPO (huecos por patrón; el generador elige el ejercicio) ----------
-const PLANTILLAS = {
-  A:  { n: 'Cuerpo completo A', slots: ['rodilla', 'empuje_h', 'tiron_v', 'femoral', 'core', 'hombro_lat', 'gemelo', 'biceps'] },
-  B:  { n: 'Cuerpo completo B', slots: ['cadera', 'tiron_h', 'empuje_v', 'unilateral', 'core', 'posterior', 'gemelo', 'triceps'] },
-  C:  { n: 'Cuerpo completo C', slots: ['rodilla', 'empuje_inc', 'tiron_v', 'cadera', 'core', 'cuadriceps', 'gemelo', 'posterior'] },
-  U1: { n: 'Tren superior 1', slots: ['empuje_h', 'tiron_h', 'empuje_v', 'tiron_v', 'core', 'hombro_lat', 'biceps', 'triceps'] },
-  L1: { n: 'Pierna 1', slots: ['rodilla', 'femoral', 'cadera', 'cuadriceps', 'core', 'gemelo', 'gluteo', 'unilateral'] },
-  U2: { n: 'Tren superior 2', slots: ['empuje_inc', 'tiron_v', 'tiron_h', 'empuje_v', 'core', 'posterior', 'triceps', 'biceps'] },
-  L2: { n: 'Pierna 2', slots: ['unilateral', 'cadera', 'femoral', 'rodilla', 'core', 'gemelo', 'gluteo', 'cuadriceps'] },
-};
-const PATRON_N = { rodilla: 'Pierna (empuje)', unilateral: 'Pierna a una', cadera: 'Glúteo (cadera)', gluteo: 'Glúteo', femoral: 'Femoral', cuadriceps: 'Cuádriceps', gemelo: 'Gemelo', empuje_h: 'Pecho', empuje_inc: 'Pecho alto', aperturas: 'Pecho (aperturas)', empuje_v: 'Hombro', hombro_lat: 'Hombro lateral', tiron_v: 'Espalda (jalón)', tiron_h: 'Espalda (remo)', posterior: 'Hombro posterior', biceps: 'Bíceps', triceps: 'Tríceps', core: 'Core', cardio: 'Cardio' };
-const COMPUESTOS = ['rodilla', 'unilateral', 'cadera', 'empuje_h', 'empuje_inc', 'empuje_v', 'tiron_v', 'tiron_h'];
-const MUSCULOS = ['Pierna', 'Glúteo', 'Pecho', 'Espalda', 'Hombro', 'Brazos', 'Core'];
 
 const CALENTAMIENTO = '8 min de bici estática suave + 5 gato-camello + 3 "mejor estiramiento del mundo" por lado.';
-const INTERVALOS = '8 min suave · 5 × (1 min 30 s alegre + 2 min suave) · 3 min muy suave. Alegre = respiras fuerte pero aún dices frases cortas.';
 
 // ---------- RECETAS (valores aproximados por ración) ----------
 const RECETAS = [
